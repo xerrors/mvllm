@@ -7,9 +7,7 @@ import toml
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
-import logging
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 # Global configuration instance
 _config_instance = None

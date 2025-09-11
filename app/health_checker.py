@@ -4,12 +4,10 @@ Health checker for vLLM Router
 
 import asyncio
 import httpx
-import logging
 from datetime import datetime
 from typing import Dict, Optional
+from loguru import logger
 from .config import Config
-
-logger = logging.getLogger(__name__)
 
 class HealthChecker:
     def __init__(self, config: Config):

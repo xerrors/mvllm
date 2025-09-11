@@ -42,7 +42,7 @@ servers = [
 [config]
 health_check_interval = 30
 config_reload_interval = 60
-request_timeout = 30
+request_timeout = 150
 health_check_timeout = 5
 max_retries = 3
 ```

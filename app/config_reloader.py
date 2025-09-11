@@ -3,11 +3,9 @@ Configuration reloader for vLLM Router
 """
 
 import asyncio
-import logging
 from typing import Optional
+from loguru import logger
 from .config import Config
-
-logger = logging.getLogger(__name__)
 
 class ConfigReloader:
     def __init__(self, config: Config):

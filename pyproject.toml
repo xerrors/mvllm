@@ -11,6 +11,7 @@ dependencies = [
     "toml>=0.10.2",
     "pydantic>=2.5.0",
     "openai",
+    "loguru>=0.7.0",
 ]
 
 [build-system]

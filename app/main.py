@@ -2,62 +2,111 @@
 FastAPI application for vLLM Router
 """
 
-import logging
+import os
+import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
+from loguru import logger
 
-from .config import Config
+from .config import Config, get_config
 from .health_checker import HealthChecker
 from .config_reloader import ConfigReloader
 from .routes import router
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Remove default logging handler
+logger.remove()
+
+# Configure loguru logging
+def setup_logging():
+    """Setup loguru logging with console and file output"""
+
+    # Create logs directory if it doesn't exist
+    logs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+
+    # Console handler
+    logger.add(
+        sys.stdout,
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        colorize=True
+    )
+
+    # General log file with rotation
+    logger.add(
+        os.path.join(logs_dir, "vllm-router.log"),
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        rotation="10 MB",
+        retention="7 days",
+        compression="zip",
+        encoding="utf-8"
+    )
+
+    # Error log file
+    logger.add(
+        os.path.join(logs_dir, "vllm-router-error.log"),
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
+        level="ERROR",
+        rotation="10 MB",
+        retention="30 days",
+        compression="zip",
+        encoding="utf-8"
+    )
+
+    # Clean structured log file for analytics
+    logger.add(
+        os.path.join(logs_dir, "vllm-router-structured.log"),
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level.name} | {message} | {extra}",
+        level=os.getenv("LOG_LEVEL", "INFO"),
+        rotation="50 MB",
+        retention="7 days",
+        compression="zip",
+        encoding="utf-8"
+    )
+
+# Initialize logging
+setup_logging()
 
 # Global variables for services
-config: Config = None
 health_checker: HealthChecker = None
 config_reloader: ConfigReloader = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global config, health_checker, config_reloader
-    
+    global health_checker, config_reloader
+
     # Startup
     logger.info("Starting vLLM Router...")
-    
+
     # Initialize configuration
-    config = Config()
-    
+    config = get_config()
+
     # Initialize and start health checker
     health_checker = HealthChecker(config)
     await health_checker.start()
-    
+
     # Initialize and start config reloader
     config_reloader = ConfigReloader(config)
     await config_reloader.start()
-    
+
     logger.info("vLLM Router started successfully")
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down vLLM Router...")
-    
+
     if health_checker:
         await health_checker.stop()
-    
+
     if config_reloader:
         await config_reloader.stop()
-    
+
     logger.info("vLLM Router shutdown complete")
 
 # Create FastAPI application
@@ -92,9 +141,10 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    config = get_config()
     healthy_servers = config.get_healthy_servers()
     total_servers = len(config.servers)
-    
+
     return {
         "status": "healthy" if len(healthy_servers) > 0 else "degraded",
         "total_servers": total_servers,
@@ -127,7 +177,13 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
     """General exception handler"""
-    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    logger.bind(
+        path=request.url.path,
+        method=request.method,
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+        status="unhandled_exception"
+    ).error("Unhandled exception occurred", exc_info=exc)
     return JSONResponse(
         status_code=500,
         content={
@@ -145,7 +201,7 @@ def main():
         "app.main:app",
         host="0.0.0.0",
         port=8888,
-        reload=True,
+        # reload=True,
         log_level="info"
     )
 
