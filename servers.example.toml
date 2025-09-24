@@ -1,60 +1,22 @@
-# vLLM Router Configuration Example
-# Copy this file to servers.toml and modify as needed
-
 [servers]
-# List of vLLM servers to load balance across
-# Each server can have a weight (1-100) for load balancing
 servers = [
-    # Example configuration with multiple servers
-    { url = "http://localhost:8000", weight = 1 },
-    { url = "http://localhost:8001", weight = 2 },
-    { url = "http://localhost:8002", weight = 1 },
-    
-    # Production example with different weights
-    # { url = "http://192.168.1.10:8080", weight = 3 },
-    # { url = "http://192.168.1.11:8080", weight = 2 },
-    # { url = "http://192.168.1.12:8080", weight = 1 },
+    { url = "http://localhost:8801", max_concurrent_requests = 10 },
+    { url = "http://localhost:8802", max_concurrent_requests = 3 },
+    { url = "http://localhost:8803", max_concurrent_requests = 4 },
 ]
 
 [config]
-# Health check interval in seconds
-# How often to check if servers are healthy
-health_check_interval = 30
-
-# Config reload interval in seconds
-# How often to check for configuration file changes
-config_reload_interval = 60
-
-# Request timeout in seconds
-# Timeout for forwarded requests to vLLM servers
+health_check_interval = 10
+config_reload_interval = 30
 request_timeout = 30
-
-# Health check timeout in seconds
-# Timeout for health check requests
 health_check_timeout = 5
-
-# Retry attempts for failed requests
-# Number of times to retry failed requests before giving up
 max_retries = 3
+failure_threshold = 2
+auto_recovery_threshold = 60
 
-# Advanced Configuration (Optional)
-# These are optional parameters for advanced tuning
-
-# [advanced]
-# Connection pool size for HTTP client
-# connection_pool_size = 100
-
-# Keep-alive timeout for HTTP connections
-# keepalive_timeout = 30
-
-# Maximum number of concurrent requests per server
-# max_concurrent_requests = 50
-
-# Load balancing strategy (weighted_random, round_robin, least_connections)
-# load_balancing_strategy = "weighted_random"
-
-# Enable request caching (true/false)
-# enable_caching = false
-
-# Cache TTL in seconds (if caching enabled)
-# cache_ttl = 300
+# 主动健康检查配置
+enable_active_health_check = true
+health_check_max_response_time = 10.0
+health_check_min_success_rate = 0.8
+health_check_window_size = 10
+health_check_consecutive_failures = 3

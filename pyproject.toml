@@ -12,6 +12,9 @@ dependencies = [
     "pydantic>=2.5.0",
     "openai",
     "loguru>=0.7.0",
+    "requests>=2.32.5",
+    "psutil>=7.1.0",
+    "rich>=14.1.0",
 ]
 
 [build-system]
