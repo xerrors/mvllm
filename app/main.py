@@ -14,7 +14,7 @@ from loguru import logger
 from app.routes import router
 
 from .config import get_config
-from .queue_manager import get_queue_manager
+from .load_manager import get_load_manager
 
 # Remove default logging handler
 logger.remove()
@@ -39,20 +39,22 @@ def setup_logging():
     logging.getLogger("fastapi.access").handlers.clear()
     logging.getLogger("starlette").handlers.clear()
 
-    # Console handler with Rich format
+    # Console handler with Rich format - only enabled when --console is used
     if os.getenv("LOG_TO_CONSOLE", "false").lower() == "true":
         # Use Rich handler for console logging
         from rich.logging import RichHandler
 
-        # Configure loguru with Rich handler
+        # Configure loguru with Rich handler for console output
+        console_handler = RichHandler(rich_tracebacks=True, tracebacks_show_locals=True)
         logger.add(
-            RichHandler(rich_tracebacks=True, tracebacks_show_locals=True),
+            console_handler,
             level=os.getenv("LOG_LEVEL", "INFO"),
             format="{message}",
             filter=lambda record: not record["extra"].get("status_update", False)
         )
+        logger.info("Console logging enabled")
 
-    # General log file with rotation
+    # Always enable file logging
     logger.add(
         os.path.join(logs_dir, "vllm-router.log"),
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
@@ -85,16 +87,22 @@ def setup_logging():
         encoding="utf-8"
     )
 
+    # Log startup status
+    if os.getenv("LOG_TO_CONSOLE", "false").lower() == "true":
+        logger.info("Console logging enabled")
+    else:
+        logger.info("Console logging disabled (use --console to enable)")
+
 # Initialize logging
 setup_logging()
 
 # Global variables for services
-queue_manager = None
+load_manager = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global queue_manager
+    global load_manager
 
     # Startup
     logger.info("Starting vLLM Router...")
@@ -102,9 +110,9 @@ async def lifespan(app: FastAPI):
     # Initialize configuration
     config = get_config()
 
-    # Initialize queue manager
-    queue_manager_instance = get_queue_manager()
-    await queue_manager_instance.start_status_monitor(interval=0.01, use_rich=True)  # 每0.1秒更新一次队列状态，使用Rich显示
+    # Initialize load manager
+    load_manager_instance = get_load_manager()
+    await load_manager_instance.start_load_monitor(interval=2, use_rich=True)  # 每2秒更新一次负载状态，使用Rich显示
 
     # Start active health check task
     if config.app_config.enable_active_health_check:
@@ -130,8 +138,8 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down vLLM Router...")
 
     # Cancel tasks
-    if queue_manager_instance:
-        await queue_manager_instance.stop_status_monitor()
+    if load_manager_instance:
+        await load_manager_instance.stop_load_monitor()
 
     if health_check_task and not health_check_task.done():
         health_check_task.cancel()
@@ -285,28 +293,33 @@ async def health_check():
         }
     }
 
-@app.get("/queue-stats")
-async def queue_stats():
-    """Queue statistics endpoint"""
-    queue_manager = get_queue_manager()
-    stats = queue_manager.get_queue_stats()
+@app.get("/load-stats")
+async def load_stats():
+    """Load statistics endpoint"""
+    load_manager = get_load_manager()
+    stats = load_manager.get_load_stats()
 
     # 格式化输出更易读
     return {
-        "global_queue_size": stats["global_queue_size"],
-        "active_requests": stats["active_requests"],
         "servers": [
             {
                 "url": server_url,
-                "load": load,
-                "healthy": server_url in [s.url for s in queue_manager.config.get_healthy_servers()]
+                "current_load": load_info["current_load"],
+                "max_capacity": load_info["max_capacity"],
+                "available_capacity": load_info["available_capacity"],
+                "utilization_percent": load_info["utilization"],
+                "status": load_info["status"],
+                "last_updated": load_info["last_updated"],
+                "detailed_metrics": load_info["detailed_metrics"]
             }
-            for server_url, load in stats["server_loads"].items()
+            for server_url, load_info in stats["server_loads"].items()
         ],
         "summary": {
             "total_servers": stats["total_servers"],
             "healthy_servers": stats["healthy_servers"],
-            "total_requests_pending": stats["global_queue_size"] + stats["active_requests"]
+            "total_active_load": stats["summary"]["total_active_load"],
+            "total_capacity": stats["summary"]["total_capacity"],
+            "overall_utilization_percent": stats["summary"]["overall_utilization"]
         }
     }
 

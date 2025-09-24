@@ -5,7 +5,7 @@ Server manager for vLLM Router
 from typing import List
 from loguru import logger
 from .config import Config, ServerConfig, get_config
-from .queue_manager import get_queue_manager
+from .load_manager import get_load_manager
 
 def get_server_manager():
     """Get the global ServerManager instance"""
@@ -25,22 +25,23 @@ class ServerManager:
 
     def get_server_stats(self) -> dict:
         """Get statistics about servers"""
-        # Note: queue_manager is fetched here to avoid circular dependency issues at startup
-        queue_manager = get_queue_manager()
+        # Note: load_manager is fetched here to avoid circular dependency issues at startup
+        load_manager = get_load_manager()
         healthy_servers = self.get_healthy_servers()
         total_servers = len(self.config.servers)
-        queue_stats = queue_manager.get_queue_stats()
+        load_stats = load_manager.get_load_stats()
 
         return {
             "total_servers": total_servers,
             "healthy_servers": len(healthy_servers),
             "unhealthy_servers": total_servers - len(healthy_servers),
-            "global_queue_size": queue_stats["global_queue_size"],
+            "total_active_load": load_stats["summary"]["total_active_load"],
             "servers": [
                 {
                     "url": server.url,
                     "healthy": server.is_healthy,
-                    "queue_length": queue_stats["server_loads"].get(server.url, {}).get("current", 0),
+                    "current_load": load_stats["server_loads"].get(server.url, {}).get("current_load", 0),
+                    "utilization": load_stats["server_loads"].get(server.url, {}).get("utilization", 0),
                     "last_check": server.last_check.isoformat() if server.last_check else None
                 }
                 for server in self.config.servers

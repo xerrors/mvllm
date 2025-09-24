@@ -70,7 +70,9 @@ class AppConfig(BaseModel):
     health_check_consecutive_failures: int = Field(default=3, ge=1)  # 连续失败多少次标记为不健康
 
 class Config:
-    def __init__(self, config_path: str = "servers.toml"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            config_path = os.getenv("CONFIG_PATH", "servers.toml")
         self.config_path = config_path
         self.servers: List[ServerConfig] = []
         self.app_config: AppConfig = AppConfig()

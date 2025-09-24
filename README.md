@@ -4,12 +4,13 @@ A FastAPI-based load balancer for vLLM servers with OpenAI-compatible API.
 
 ## Features
 
-- Load Balancing: Weighted random selection across multiple vLLM servers
-- Health Checks: Automatic server health monitoring and failover
-- Configuration Hot Reload: Live configuration updates without restart
-- OpenAI Compatible: Full compatibility with OpenAI API format
-- Monitoring: Built-in health and statistics endpoints
-- High Performance: Async/await based architecture
+- **Real-time Load Monitoring**: Direct server load retrieval via `/metrics` endpoint
+- **Smart Load Balancing**: Dynamic server selection based on actual load
+- **Health Checks**: Automatic server health monitoring and failover
+- **Configuration Hot Reload**: Live configuration updates without restart
+- **OpenAI Compatible**: Full compatibility with OpenAI API format
+- **Monitoring**: Built-in load and health statistics endpoints
+- **High Performance**: Direct request forwarding without queue bottlenecks
 
 ## Quick Start
 
@@ -35,8 +36,8 @@ cp servers.example.toml servers.toml
 ```toml
 [servers]
 servers = [
-    { url = "http://172.19.13.5:8081", weight = 1 },
-    { url = "http://172.19.13.6:8088", weight = 1 },
+    { url = "http://172.19.13.5:8081", max_concurrent_requests = 3 },
+    { url = "http://172.19.13.6:8088", max_concurrent_requests = 3 },
 ]
 
 [config]
@@ -49,12 +50,30 @@ max_retries = 3
 
 ### Running the Server
 
-#### Option 1: Direct Execution
+#### Option 1: CLI (Recommended)
+```bash
+# Basic run - no console output
+vllm-router run
+
+# With console logging
+vllm-router run --console
+
+# Custom host and port
+vllm-router run --host 0.0.0.0 --port 8888 --console
+
+# With auto-reload for development
+vllm-router run --reload --console
+
+# Custom config file
+vllm-router run --config custom-servers.toml --console
+```
+
+#### Option 2: Direct Execution
 ```bash
 uv run python3 run.py
 ```
 
-#### Option 2: Docker
+#### Option 3: Docker
 ```bash
 # Build the image
 docker build -t vllm-router .
@@ -63,7 +82,7 @@ docker build -t vllm-router .
 docker run -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router
 ```
 
-#### Option 3: Docker Compose
+#### Option 4: Docker Compose
 ```bash
 docker-compose up -d
 ```
@@ -83,6 +102,34 @@ The server will start on `http://localhost:8888` by default.
 
 - `GET /` - Service information
 - `GET /health` - Health status and server statistics
+- `GET /load-stats` - Real-time load statistics and server utilization
+
+### CLI Commands
+
+```bash
+# Show help
+vllm-router --help
+
+# Run server with options
+vllm-router run --help
+
+# Check configuration
+vllm-router check-config
+
+# Show version
+vllm-router version
+```
+
+#### CLI Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--console`, `-c` | Enable console logging output | `false` |
+| `--host`, `-h` | Host to bind to | `0.0.0.0` |
+| `--port`, `-p` | Port to bind to | `8888` |
+| `--config` | Path to configuration file | `servers.toml` |
+| `--reload` | Enable auto-reload for development | `false` |
+| `--log-level` | Logging level | `INFO` |
 
 ## Usage Examples
 
