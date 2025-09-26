@@ -22,7 +22,8 @@ async def _select_optimal_server(config: Config, load_manager: LoadManager) -> s
     load_stats = load_manager.get_load_stats()
 
     # 计算每个服务器的综合得分（负载+可用容量）
-    best_servers: List = []  # 存储得分相同的服务器
+    candidates_under_threshold: List = []  # 存储score < 0.5的服务器
+    best_servers: List = []  # 存储得分相同的服务器（后备选择）
     best_score = float('inf')
 
     for server in healthy_servers:
@@ -38,21 +39,33 @@ async def _select_optimal_server(config: Config, load_manager: LoadManager) -> s
         # 计算相对负载（考虑服务器容量）
         # 综合得分：Running 权重更高，除以容量确保公平比较
         if capacity > 0:
-            score = (running * 3 + waiting * 1) / capacity
+            score = (running + waiting * 0.5) / capacity
         else:
             score = float('inf')  # 容量为0的服务器不应该被选择
 
+        # 收集score < 0.5的服务器
+        if score < 0.5:
+            candidates_under_threshold.append(server)
+
+        # 同时记录最佳得分的服务器作为后备
         if score < best_score:
             best_score = score
             best_servers = [server]  # 重置列表，只包含当前最佳服务器
         elif score == best_score:
             best_servers.append(server)  # 添加得分相同的服务器
 
+    # 优先选择score < 0.5的服务器
+    if candidates_under_threshold:
+        selected_server = random.choice(candidates_under_threshold)
+        selected_metrics = load_stats['server_loads'][selected_server.url]['detailed_metrics']
+        logger.info(f"Selected server {selected_server.url} from {len(candidates_under_threshold)} candidates under threshold (score < 0.5) - Running: {selected_metrics['num_requests_running']}, Waiting: {selected_metrics['num_requests_waiting']}")
+        return selected_server.url
+
+    # 如果没有score < 0.5的服务器，选择得分最小的
     if best_servers:
-        # 从得分相同的服务器中随机选择一个
         selected_server = random.choice(best_servers)
         selected_metrics = load_stats['server_loads'][selected_server.url]['detailed_metrics']
-        logger.info(f"Selected server {selected_server.url} from {len(best_servers)} candidates with score {best_score} - Running: {selected_metrics['num_requests_running']}, Waiting: {selected_metrics['num_requests_waiting']}")
+        logger.info(f"Selected server {selected_server.url} from {len(best_servers)} candidates with best score {best_score} - Running: {selected_metrics['num_requests_running']}, Waiting: {selected_metrics['num_requests_waiting']}")
         return selected_server.url
 
     # 理论上不会到达这里
