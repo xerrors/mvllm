@@ -76,3 +76,5 @@ docs/_build/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+
+servers.toml
