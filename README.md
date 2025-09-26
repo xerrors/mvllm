@@ -12,6 +12,9 @@ When you have multiple GPU servers running vLLM, you face:
 
 vLLM Router provides a unified entry point that intelligently distributes requests to the best servers.
 
+<img width="1406" height="254" alt="image" src="https://github.com/user-attachments/assets/b4b476e8-3f03-4ed4-9cdb-2818c7ca0ec1" />
+
+
 ## Key Advantages
 
 ### 🎯 Intelligent Load Balancing
@@ -24,10 +27,6 @@ vLLM Router provides a unified entry point that intelligently distributes reques
 - **Automatic Failover**: Detects and removes unhealthy servers
 - **Smart Retry**: Automatically retries failed requests on other servers
 - **Hot Reload**: Configuration changes without service restart
-
-### 🌐 OpenAI Compatible
-- **Seamless Integration**: Fully compatible with OpenAI API
-- **Universal Client**: Works with any OpenAI-compatible client
 
 ## Quick Start
 
