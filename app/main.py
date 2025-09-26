@@ -111,8 +111,17 @@ async def lifespan(app: FastAPI):
     config = get_config()
 
     # Initialize load manager
-    load_manager_instance = get_load_manager()
-    await load_manager_instance.start_load_monitor(interval=2, use_rich=True)  # 每2秒更新一次负载状态，使用Rich显示
+    # 检测是否启用 console 输出，决定是否使用全屏模式
+    console_enabled = os.getenv("LOG_TO_CONSOLE", "false").lower() == "true"
+    fullscreen_mode = not console_enabled  # 无 console 时使用全屏模式
+
+    load_manager_instance = get_load_manager(fullscreen_mode=fullscreen_mode)
+    await load_manager_instance.start_load_monitor(interval=0.5, use_rich=True)  # 每0.5秒更新一次负载状态，使用Rich显示
+
+    if fullscreen_mode:
+        logger.info("vLLM Router running in fullscreen monitor mode (console disabled)")
+    else:
+        logger.info("vLLM Router running with console output enabled")
 
     # Start active health check task
     if config.app_config.enable_active_health_check:

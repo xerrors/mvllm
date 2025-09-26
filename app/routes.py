@@ -1,8 +1,9 @@
 import asyncio
 import httpx
+import random
 from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
-from typing import Union
+from typing import Union, List
 from loguru import logger
 import uuid
 from .config import Config, get_config
@@ -21,27 +22,40 @@ async def _select_optimal_server(config: Config, load_manager: LoadManager) -> s
     load_stats = load_manager.get_load_stats()
 
     # 计算每个服务器的综合得分（负载+可用容量）
-    best_server = None
+    best_servers: List = []  # 存储得分相同的服务器
     best_score = float('inf')
 
     for server in healthy_servers:
         server_load_info = load_stats["server_loads"].get(server.url, {})
-        current_load = server_load_info.get("current_load", 0)
+        detailed_metrics = server_load_info.get("detailed_metrics", {})
         max_capacity = server_load_info.get("max_capacity", 3)
-        utilization = server_load_info.get("utilization", 0)
 
-        # 综合得分：主要考虑当前负载，其次是利用率
-        score = current_load * 2 + utilization * 0.01
+        # 获取详细负载数据和容量
+        running = detailed_metrics.get("num_requests_running", 0)
+        waiting = detailed_metrics.get("num_requests_waiting", 0)
+        capacity = max_capacity
+
+        # 计算相对负载（考虑服务器容量）
+        # 综合得分：Running 权重更高，除以容量确保公平比较
+        if capacity > 0:
+            score = (running * 3 + waiting * 1) / capacity
+        else:
+            score = float('inf')  # 容量为0的服务器不应该被选择
 
         if score < best_score:
             best_score = score
-            best_server = server
+            best_servers = [server]  # 重置列表，只包含当前最佳服务器
+        elif score == best_score:
+            best_servers.append(server)  # 添加得分相同的服务器
 
-    if best_server:
-        logger.info(f"Selected server {best_server.url} with load {load_stats['server_loads'][best_server.url].get('current_load', 0)}/{load_stats['server_loads'][best_server.url].get('max_capacity', 3)}")
-        return best_server.url
+    if best_servers:
+        # 从得分相同的服务器中随机选择一个
+        selected_server = random.choice(best_servers)
+        selected_metrics = load_stats['server_loads'][selected_server.url]['detailed_metrics']
+        logger.info(f"Selected server {selected_server.url} from {len(best_servers)} candidates with score {best_score} - Running: {selected_metrics['num_requests_running']}, Waiting: {selected_metrics['num_requests_waiting']}")
+        return selected_server.url
 
-    # 如果没有找到最佳服务器（理论上不会发生），随机选择一个健康服务器
+    # 理论上不会到达这里
     selected = healthy_servers[0]
     logger.info(f"Randomly selected server {selected.url}")
     return selected.url

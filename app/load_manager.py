@@ -16,15 +16,22 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from .config import Config, get_config
 
 class LoadManager:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, fullscreen_mode: bool = False):
         self.config = config
         self.server_loads: Dict[str, dict] = {}  # 服务器负载指标字典
         self.server_status: Dict[str, bool] = {}  # 服务器状态
         self.last_updated: Dict[str, datetime] = {}  # 最后更新时间
         self.load_check_lock = asyncio.Lock()
+        self.fullscreen_mode = fullscreen_mode
 
         # Rich console for status display
-        self.console = Console(file=sys.stdout)
+        if fullscreen_mode:
+            # 全屏模式使用 stderr，避免与日志输出冲突
+            self.console = Console(file=sys.stderr, width=None, height=None)
+        else:
+            # 普通模式使用 stdout
+            self.console = Console(file=sys.stdout)
+
         self.live_display = None
 
         # 初始化服务器状态
@@ -197,20 +204,20 @@ class LoadManager:
         try:
             stats = self.get_load_stats()
 
-            # 创建主表格 - 显示详细的负载数据（不显示Load列，因为已有Running+Waiting）
+            # 创建主表格 - 显示详细的负载数据（用序号代替时间，时间显示在标题栏）
             table = Table(show_header=True, header_style="bold blue", box=None)
-            table.add_column("Time", style="cyan", no_wrap=True)
-            table.add_column("Server", style="green")
-            table.add_column("Running", style="yellow", justify="right")
-            table.add_column("Waiting", style="bright_yellow", justify="right")
-            table.add_column("Capacity", style="magenta", justify="right")
-            table.add_column("Usage", style="cyan", justify="right")
-            table.add_column("Status", style="blue", justify="center")
+            table.add_column("#", style="cyan", justify="right", width=2)
+            table.add_column("Server", style="green", width=25)  # 为完整URL预留足够空间
+            table.add_column("Running", style="yellow", justify="right", width=8)
+            table.add_column("Waiting", style="bright_yellow", justify="right", width=8)
+            table.add_column("Capacity", style="magenta", justify="right", width=8)
+            table.add_column("Usage", style="cyan", justify="right", width=7)
 
             # 服务器负载信息
             server_rows = []
-            for server in self.config.servers:
-                server_name = server.url.split("://")[-1].split(":")[0]
+            current_time = datetime.now().strftime('%H:%M:%S')
+            for i, server in enumerate(self.config.servers, 1):
+                server_name = server.url  # 显示完整的 server_url
                 load_info = stats["server_loads"][server.url]
                 current_load = load_info["current_load"]
                 max_capacity = load_info["max_capacity"]
@@ -222,45 +229,36 @@ class LoadManager:
                 running = detailed_metrics["num_requests_running"]
                 waiting = detailed_metrics["num_requests_waiting"]
 
-                # 根据负载状态设置颜色和图标
+                # 根据负载状态设置颜色
                 if not status:
-                    status_icon = "❌"
                     # 为不健康的服务器添加删除线
                     server_name = f"[red strike]{server_name}[/red strike]"
                     running_str = f"[red]{running}[/red]"
                     waiting_str = f"[red]{waiting}[/red]"
-                    current_load_str = f"[red]{current_load}[/red]"
                     utilization_str = f"[red]{utilization:.1f}%[/red]"
                 elif utilization >= 90:
-                    status_icon = "🔴"
                     server_name = f"[red]{server_name}[/red]"
                     running_str = f"[red]{running}[/red]"
                     waiting_str = f"[red]{waiting}[/red]"
-                    current_load_str = f"[red]{current_load}[/red]"
                     utilization_str = f"[red]{utilization:.1f}%[/red]"
                 elif utilization >= 70:
-                    status_icon = "🟡"
                     server_name = f"[yellow]{server_name}[/yellow]"
                     running_str = f"[bright_yellow]{running}[/bright_yellow]"
                     waiting_str = f"[bright_yellow]{waiting}[/bright_yellow]"
-                    current_load_str = f"[yellow]{current_load}[/yellow]"
                     utilization_str = f"[yellow]{utilization:.1f}%[/yellow]"
                 else:
-                    status_icon = "✅"
                     server_name = f"[green]{server_name}[/green]"
                     running_str = f"[green]{running}[/green]"
                     waiting_str = f"[green]{waiting}[/green]"
-                    current_load_str = f"[green]{current_load}[/green]"
                     utilization_str = f"[green]{utilization:.1f}%[/green]"
 
                 server_rows.append((
-                    f"{datetime.now().strftime('%H:%M:%S')}",
+                    f"{i}",
                     server_name,
                     running_str,
                     waiting_str,
                     f"{max_capacity}",
-                    utilization_str,
-                    status_icon
+                    utilization_str
                 ))
 
             # 添加服务器行
@@ -285,12 +283,25 @@ class LoadManager:
             else:
                 health_status = "Mostly unhealthy"
 
-            # 创建主面板 - 显示详细的总计信息
+            # 根据模式选择不同的面板样式
+            if self.fullscreen_mode:
+                # 全屏模式：更简洁的标题和样式
+                panel_title = f"vLLM Router Monitor ({current_time})"
+                panel_subtitle = f"{healthy_count}/{total_servers} Servers | {total_running} Running | {total_waiting} Waiting | {overall_utilization:.1f}% Usage"
+                border_style = "bright_blue"
+            else:
+                # 普通模式：原有的详细样式
+                panel_title = f"vLLM Router - Real-time Load Monitor ({current_time})"
+                panel_subtitle = f"Health: {healthy_count}/{total_servers} | {health_status} | Running: {total_running} | Waiting: {total_waiting} | Total Usage: {overall_utilization:.1f}%"
+                border_style = "blue"
+
+            # 创建主面板
             panel = Panel(
                 table,
-                title="vLLM Router - Real-time Load Monitor",
-                subtitle=f"Health: {healthy_count}/{total_servers} | {health_status} | Running: {total_running} | Waiting: {total_waiting} | Total Usage: {overall_utilization:.1f}%",
-                border_style="blue"
+                title=panel_title,
+                subtitle=panel_subtitle,
+                border_style=border_style,
+                padding=(0, 1)  # 全屏模式下减少内边距
             )
 
             return panel
@@ -321,27 +332,57 @@ class LoadManager:
             self.monitor_task = asyncio.create_task(simple_monitor_loop())
             return
 
-        logger.info("负载监控已启动 - 使用Rich Live模式")
+        if self.fullscreen_mode:
+            logger.info("负载监控已启动 - 全屏Rich Live模式")
+        else:
+            logger.info("负载监控已启动 - Rich Live模式")
 
         async def rich_monitor_loop():
             try:
                 # 初始化面板
                 initial_panel = self.create_load_status_panel()
-                with Live(initial_panel, refresh_per_second=1, console=self.console) as live:
-                    while True:
-                        try:
-                            await self.update_all_server_loads()
-                            new_panel = self.create_load_status_panel()
-                            live.update(new_panel)
-                            await asyncio.sleep(interval)
-                        except Exception as e:
-                            logger.error(f"更新负载面板时出错: {e}")
-                            # 继续运行，不要因为一次错误而停止
-                            await asyncio.sleep(interval)
+
+                # 全屏模式使用不同的显示参数
+                if self.fullscreen_mode:
+                    # 全屏模式：垂直居中，自动调整大小
+                    with Live(
+                        initial_panel,
+                        refresh_per_second=1,
+                        console=self.console,
+                        vertical_overflow="visible",
+                        screen=True
+                    ) as live:
+                        while True:
+                            try:
+                                await self.update_all_server_loads()
+                                new_panel = self.create_load_status_panel()
+                                live.update(new_panel)
+                                await asyncio.sleep(interval)
+                            except Exception as e:
+                                logger.error(f"更新负载面板时出错: {e}")
+                                await asyncio.sleep(interval)
+                else:
+                    # 普通模式：保持原有行为
+                    with Live(initial_panel, refresh_per_second=1, console=self.console) as live:
+                        while True:
+                            try:
+                                await self.update_all_server_loads()
+                                new_panel = self.create_load_status_panel()
+                                live.update(new_panel)
+                                await asyncio.sleep(interval)
+                            except Exception as e:
+                                logger.error(f"更新负载面板时出错: {e}")
+                                await asyncio.sleep(interval)
             except asyncio.CancelledError:
-                logger.info("Rich Live负载监控已停止")
+                if self.fullscreen_mode:
+                    logger.info("全屏Rich Live负载监控已停止")
+                else:
+                    logger.info("Rich Live负载监控已停止")
             except Exception as e:
-                logger.error(f"Rich Live负载监控初始化出错: {e}")
+                if self.fullscreen_mode:
+                    logger.error(f"全屏Rich Live负载监控初始化出错: {e}")
+                else:
+                    logger.error(f"Rich Live负载监控初始化出错: {e}")
 
         self.monitor_task = asyncio.create_task(rich_monitor_loop())
         logger.info(f"实时负载监控已启动，间隔: {interval}秒")
@@ -359,11 +400,11 @@ class LoadManager:
 # 全局负载管理器实例
 _global_load_manager = None
 
-def get_load_manager() -> LoadManager:
+def get_load_manager(fullscreen_mode: bool = False) -> LoadManager:
     """获取全局负载管理器实例"""
     global _global_load_manager
     if _global_load_manager is None:
         config = get_config()
-        _global_load_manager = LoadManager(config)
-        logger.info("Global load manager instance created")
+        _global_load_manager = LoadManager(config, fullscreen_mode=fullscreen_mode)
+        logger.info(f"Global load manager instance created (fullscreen={fullscreen_mode})")
     return _global_load_manager
