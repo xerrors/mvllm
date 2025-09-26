@@ -1,37 +1,37 @@
 # vLLM Router
 
-智能负载均衡器，用于分布式 vLLM 服务器集群
+Intelligent load balancer for distributed vLLM server clusters
 
-## 解决什么问题？
+## What problem does it solve?
 
-当你有多个 GPU 服务器运行 vLLM 时，会面临：
+When you have multiple GPU servers running vLLM, you face:
 
-- **资源分散**：多个独立的 GPU 无法统一管理
-- **负载不均**：有的服务器过载，有的空闲
-- **可用性差**：单个服务器故障影响整体服务
+- **Fragmented Resources**: Multiple independent GPUs cannot be managed unifiedly
+- **Unbalanced Load**: Some servers are overloaded while others are idle
+- **Poor Availability**: Single server failure affects overall service
 
-vLLM Router 提供统一的入口，智能分配请求到最佳服务器。
+vLLM Router provides a unified entry point that intelligently distributes requests to the best servers.
 
-## 核心优势
+## Key Advantages
 
-### 🎯 智能负载均衡
-- **实时监控**：直接获取 vLLM 的 `/metrics` 指标
-- **智能算法**：`(running + waiting * 0.5) / capacity`
-- **优先级选择**：优先选择负载 < 50% 的服务器
-- **零队列**：直接转发，无中间队列
+### 🎯 Intelligent Load Balancing
+- **Real-time Monitoring**: Direct metrics from vLLM `/metrics` endpoints
+- **Smart Algorithm**: `(running + waiting * 0.5) / capacity`
+- **Priority Selection**: Prefers servers with load < 50%
+- **Zero Queue**: Direct forwarding without intermediate queues
 
-### 🔄 高可用性
-- **自动故障转移**：检测并剔除不健康的服务器
-- **智能重试**：请求失败时自动重试其他服务器
-- **热重载**：配置修改无需重启服务
+### 🔄 High Availability
+- **Automatic Failover**: Detects and removes unhealthy servers
+- **Smart Retry**: Automatically retries failed requests on other servers
+- **Hot Reload**: Configuration changes without service restart
 
-### 🌐 OpenAI 兼容
-- **无缝集成**：完全兼容 OpenAI API
-- **通用客户端**：支持任何 OpenAI 兼容的客户端
+### 🌐 OpenAI Compatible
+- **Seamless Integration**: Fully compatible with OpenAI API
+- **Universal Client**: Works with any OpenAI-compatible client
 
-## 快速开始
+## Quick Start
 
-### 安装
+### Installation
 
 ```bash
 git clone https://github.com/xerrors/vllm-router.git
@@ -39,15 +39,15 @@ cd vllm-router
 uv sync
 ```
 
-### 配置
+### Configuration
 
-创建服务器配置文件：
+Create server configuration file:
 
 ```bash
 cp servers.example.toml servers.toml
 ```
 
-编辑 `servers.toml`：
+Edit `servers.toml`:
 
 ```toml
 [servers]
@@ -63,22 +63,22 @@ request_timeout = 120
 max_retries = 3
 ```
 
-### 运行
+### Running
 
 ```bash
-# 生产模式（全屏监控）
+# Production mode (fullscreen monitoring)
 vllm-router run
 
-# 开发模式（控制台日志）
+# Development mode (console logging)
 vllm-router run --console
 
-# 自定义端口
+# Custom port
 vllm-router run --port 8888
 ```
 
-## 使用示例
+## Usage Examples
 
-### 聊天完成
+### Chat Completions
 
 ```bash
 curl -X POST http://localhost:8888/v1/chat/completions \
@@ -86,27 +86,27 @@ curl -X POST http://localhost:8888/v1/chat/completions \
   -d '{
     "model": "llama3.1:8b",
     "messages": [
-      {"role": "user", "content": "你好，请介绍一下自己"}
+      {"role": "user", "content": "Hello, please introduce yourself"}
     ]
   }'
 ```
 
-### 查看负载状态
+### Check Load Status
 
 ```bash
 curl http://localhost:8888/health
 curl http://localhost:8888/load-stats
 ```
 
-## API 端点
+## API Endpoints
 
-- `POST /v1/chat/completions` - 聊天完成
-- `POST /v1/completions` - 文本完成
-- `GET /v1/models` - 模型列表
-- `GET /health` - 健康状态
-- `GET /load-stats` - 负载统计
+- `POST /v1/chat/completions` - Chat completions
+- `POST /v1/completions` - Text completions
+- `GET /v1/models` - Model listing
+- `GET /health` - Health status
+- `GET /load-stats` - Load statistics
 
-## 部署
+## Deployment
 
 ### Docker
 
@@ -128,23 +128,27 @@ services:
       - ./servers.toml:/app/servers.toml
 ```
 
-## 配置说明
+## Configuration
 
-### 服务器配置
-- `url`: vLLM 服务器地址
-- `max_concurrent_requests`: 最大并发请求数
+### Server Configuration
+- `url`: vLLM server address
+- `max_concurrent_requests`: Maximum concurrent requests
 
-### 全局配置
-- `health_check_interval`: 健康检查间隔（秒）
-- `request_timeout`: 请求超时时间（秒）
-- `max_retries`: 最大重试次数
+### Global Configuration
+- `health_check_interval`: Health check interval (seconds)
+- `request_timeout`: Request timeout (seconds)
+- `max_retries`: Maximum retry attempts
 
-## 监控
+## Monitoring
 
-- **实时负载监控**：显示每个服务器的运行和等待请求数
-- **健康状态**：实时监控服务器可用性
-- **资源利用率**：GPU 缓存使用率等指标
+- **Real-time Load Monitoring**: Shows running and waiting requests per server
+- **Health Status**: Real-time server availability monitoring
+- **Resource Utilization**: GPU cache usage and other metrics
 
-## 许可证
+## Chinese Version
+
+For Chinese documentation, see [README.zh.md](README.zh.md)
+
+## License
 
 MIT License
