@@ -236,18 +236,52 @@ async def completions(
 
 @router.get("/models")
 async def models(
-    request: Request,
-    config: Config = Depends(get_config),
-    load_manager: LoadManager = Depends(get_load_manager)
+    config: Config = Depends(get_config)
 ):
-    """OpenAI-compatible models endpoint"""
-    return await _forward_request_with_retry(
-        request=request,
-        path="/v1/models",
-        method="GET",
-        config=config,
-        load_manager=load_manager
-    )
+    """OpenAI-compatible models endpoint - returns all available models from all servers"""
+    try:
+        # 更新所有服务器的模型信息
+        await config.update_all_server_models()
+
+        # 收集所有服务器支持的模型
+        all_models = set()
+        model_details = []
+
+        for server in config.servers:
+            if server.is_healthy and server.supported_models:
+                for model_name in server.supported_models:
+                    if model_name not in all_models:
+                        all_models.add(model_name)
+                        model_details.append({
+                            "id": model_name,
+                            "object": "model",
+                            "created": int(server.models_last_updated.timestamp()) if server.models_last_updated else 0,
+                            "owned_by": "vllm-router",
+                            "permission": [],
+                            "root": model_name,
+                            "parent": None
+                        })
+
+        # 如果没有找到任何模型，返回一个默认响应
+        if not model_details:
+            model_details = [{
+                "id": "no-models-available",
+                "object": "model",
+                "created": 0,
+                "owned_by": "vllm-router",
+                "permission": [],
+                "root": "no-models-available",
+                "parent": None
+            }]
+
+        return {
+            "object": "list",
+            "data": model_details
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting models: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving models: {str(e)}")
 
 @router.post("/embeddings")
 async def embeddings(
