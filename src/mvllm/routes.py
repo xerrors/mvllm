@@ -5,7 +5,6 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Union, List
 from loguru import logger
-import uuid
 from .config import Config, get_config
 from .load_manager import LoadManager, get_load_manager
 

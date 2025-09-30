@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 from loguru import logger
 
-from app.routes import router
+from mvllm.routes import router
 
 from .config import get_config
 from .load_manager import get_load_manager
@@ -24,7 +24,7 @@ def setup_logging():
     """Setup Rich-based logging with console and file output"""
 
     # Create logs directory if it doesn't exist
-    logs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+    logs_dir = "logs"
     os.makedirs(logs_dir, exist_ok=True)
 
     # Configure uvicorn logging to work with Rich
@@ -56,7 +56,7 @@ def setup_logging():
 
     # Always enable file logging
     logger.add(
-        os.path.join(logs_dir, "vllm-router.log"),
+        os.path.join(logs_dir, "mvllm.log"),
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         level=os.getenv("LOG_LEVEL", "INFO"),
         rotation="10 MB",
@@ -67,7 +67,7 @@ def setup_logging():
 
     # Error log file
     logger.add(
-        os.path.join(logs_dir, "vllm-router-error.log"),
+        os.path.join(logs_dir, "mvllm-error.log"),
         format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
         level="ERROR",
         rotation="10 MB",
@@ -78,7 +78,7 @@ def setup_logging():
 
     # Clean structured log file for analytics
     logger.add(
-        os.path.join(logs_dir, "vllm-router-structured.log"),
+        os.path.join(logs_dir, "mvllm-structured.log"),
         format="{time:YYYY-MM-DD HH:mm:ss} | {level.name} | {message} | {extra}",
         level=os.getenv("LOG_LEVEL", "INFO"),
         rotation="50 MB",
@@ -93,8 +93,8 @@ def setup_logging():
     else:
         logger.info("Console logging disabled (use --console to enable)")
 
-# Initialize logging
-setup_logging()
+# Initialize logging - will be called again in main() with proper environment variables
+# setup_logging()
 
 # Global variables for services
 load_manager = None
@@ -369,11 +369,37 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 def main():
     """Main entry point"""
+    # Setup logging with current environment variables
+    setup_logging()
+
+    # Parse command line arguments for uvicorn
+    import sys
+    host = "0.0.0.0"
+    port = 8888
+    reload = False
+
+    # Parse sys.argv for uvicorn parameters
+    i = 0
+    while i < len(sys.argv):
+        if sys.argv[i] == "--host" and i + 1 < len(sys.argv):
+            host = sys.argv[i + 1]
+            i += 2
+        elif sys.argv[i] == "--port" and i + 1 < len(sys.argv):
+            port = int(sys.argv[i + 1])
+            i += 2
+        elif sys.argv[i] == "--reload":
+            reload = True
+            i += 1
+        else:
+            i += 1
+
+    logger.info(f"Starting server on {host}:{port}")
+
     uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8888,
-        reload=True,
+        app,
+        host=host,
+        port=port,
+        reload=reload,
         log_config=None,  # 禁用 uvicorn 的日志
         log_level="critical",  # 设置为最高级别，抑制日志输出
         access_log=False,      # 禁用访问日志

@@ -5,12 +5,11 @@ Command line interface for vLLM Router using Typer
 import os
 import sys
 import typer
-from typing import Optional
 from .main import main as app_main
 from .config import get_config
 
 app = typer.Typer(
-    name="vllm-router",
+    name="mvllm",
     help="A FastAPI-based load balancer for vLLM servers with real-time load monitoring",
     add_completion=False
 )
@@ -60,7 +59,7 @@ def run(
 
     # Set uvicorn arguments
     sys.argv = [
-        "vllm-router",
+        "mvllm",
         "--host", host,
         "--port", str(port),
     ]
@@ -85,7 +84,7 @@ def check_config(
 
     try:
         config_instance = get_config()
-        print(f"✅ Configuration loaded successfully")
+        print("✅ Configuration loaded successfully")
         print(f"   Total servers: {len(config_instance.servers)}")
         print(f"   Healthy servers: {len(config_instance.get_healthy_servers())}")
 

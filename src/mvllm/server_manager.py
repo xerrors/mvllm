@@ -2,8 +2,6 @@
 Server manager for vLLM Router
 """
 
-from typing import List
-from loguru import logger
 from .config import Config, ServerConfig, get_config
 from .load_manager import get_load_manager
 
@@ -15,11 +13,11 @@ class ServerManager:
     def __init__(self, config: Config):
         self.config = config
 
-    def get_all_servers(self) -> List[ServerConfig]:
+    def get_all_servers(self) -> list[ServerConfig]:
         """Get all servers (healthy and unhealthy)"""
         return self.config.servers
 
-    def get_healthy_servers(self) -> List[ServerConfig]:
+    def get_healthy_servers(self) -> list[ServerConfig]:
         """Get only healthy servers"""
         return self.config.get_healthy_servers()
 

@@ -1,1 +1,0 @@
-# This file is deprecated and will be removed. Dependencies are now imported directly where needed.

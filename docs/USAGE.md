@@ -6,36 +6,36 @@
 
 ```bash
 # Start server without console output (logs only to files)
-vllm-router run
+mvllm run
 
 # Start server with console logging
-vllm-router run --console
+mvllm run --console
 
 # Start with custom host and port
-vllm-router run --host 0.0.0.0 --port 9999 --console
+mvllm run --host 0.0.0.0 --port 9999 --console
 
 # Development mode with auto-reload
-vllm-router run --reload --console
+mvllm run --reload --console
 
 # Custom configuration file
-vllm-router run --config production-servers.toml --console
+mvllm run --config production-servers.toml --console
 ```
 
 ### Management Commands
 
 ```bash
 # Check configuration syntax
-vllm-router check-config
+mvllm check-config
 
 # Check custom configuration
-vllm-router check-config --config custom.toml
+mvllm check-config --config custom.toml
 
 # Show version
-vllm-router version
+mvllm version
 
 # Show help
-vllm-router --help
-vllm-router run --help
+mvllm --help
+mvllm run --help
 ```
 
 ### Log Management
@@ -44,15 +44,15 @@ The router provides comprehensive logging:
 
 - **Console Output**: Only shown when `--console` flag is used
 - **File Logging**: Always enabled
-  - `logs/vllm-router.log` - General application logs
-  - `logs/vllm-router-error.log` - Error logs only
-  - `logs/vllm-router-structured.log` - Structured logs for analytics
+  - `logs/mvllm.log` - General application logs
+  - `logs/mvllm-error.log` - Error logs only
+  - `logs/mvllm-structured.log` - Structured logs for analytics
 
 ### Log Levels
 
 ```bash
 # Set log level (DEBUG, INFO, WARNING, ERROR)
-vllm-router run --log-level DEBUG --console
+mvllm run --log-level DEBUG --console
 ```
 
 ## Configuration
@@ -160,13 +160,13 @@ The router uses a smart load balancing algorithm:
 
 ```bash
 # Build image
-docker build -t vllm-router .
+docker build -t mvllm .
 
 # Run without console logs
-docker run -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router
+docker run -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml mvllm
 
 # Run with console logs (for debugging)
-docker run -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router run --console
+docker run -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml mvllm run --console
 ```
 
 ### Docker Compose
@@ -174,7 +174,7 @@ docker run -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router run
 ```yaml
 version: '3.8'
 services:
-  vllm-router:
+  mvllm:
     build: .
     ports:
       - "8888:8888"
@@ -192,24 +192,24 @@ services:
 ```bash
 # Clone and install dependencies
 git clone <repository>
-cd vllm-router
+cd mvllm
 pip install -e .
 
 # Run in development mode
-vllm-router run --reload --console
+mvllm run --reload --console
 ```
 
 ### Testing
 
 ```bash
 # Check configuration
-vllm-router check-config
+mvllm check-config
 
 # Test with different log levels
-vllm-router run --log-level DEBUG --console
+mvllm run --log-level DEBUG --console
 
 # Test with custom config
-vllm-router run --config test-servers.toml --console
+mvllm run --config test-servers.toml --console
 ```
 
 ## Troubleshooting
@@ -217,7 +217,7 @@ vllm-router run --config test-servers.toml --console
 ### Common Issues
 
 1. **No console output**: Use `--console` flag to enable logging
-2. **Server not starting**: Check configuration with `vllm-router check-config`
+2. **Server not starting**: Check configuration with `mvllm check-config`
 3. **High load**: Monitor with `/load-stats` endpoint
 4. **Connection issues**: Check server health with `/health` endpoint
 
@@ -225,7 +225,7 @@ vllm-router run --config test-servers.toml --console
 
 ```bash
 # Enable debug logging
-vllm-router run --log-level DEBUG --console
+mvllm run --log-level DEBUG --console
 
 # Check detailed server status
 curl http://localhost:8888/health
@@ -233,6 +233,6 @@ curl http://localhost:8888/health
 
 ### Log Files
 
-- `logs/vllm-router.log` - Main application logs
-- `logs/vllm-router-error.log` - Error logs only
-- `logs/vllm-router-structured.log` - Machine-readable logs
+- `logs/mvllm.log` - Main application logs
+- `logs/mvllm-error.log` - Error logs only
+- `logs/mvllm-structured.log` - Machine-readable logs

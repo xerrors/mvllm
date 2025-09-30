@@ -7,9 +7,7 @@
 import asyncio
 import random
 import httpx
-import json
 import time
-from datetime import datetime
 from loguru import logger
 
 # 配置
@@ -48,7 +46,7 @@ async def send_completion_request(client: httpx.AsyncClient, request_num: int, b
         end_time = time.time()
 
         if response.status_code == 200:
-            result = response.json()
+            # result = response.json()
             logger.info(f"✅ 请求成功 [第{batch_num}批-第{request_num}次] 耗时: {end_time - start_time:.2f}s")
             return True
         else:
@@ -108,7 +106,7 @@ async def main():
                 batch_num += 1
 
     except KeyboardInterrupt:
-        logger.info(f"⏹️ 测试被用户中断")
+        logger.info("⏹️ 测试被用户中断")
         logger.info(f"📊 最终统计: 成功 {total_success}/{total_requests} ({success_rate:.1f}%)")
     except Exception as e:
         logger.error(f"💥 测试过程中发生错误: {e}")

@@ -6,21 +6,19 @@ import asyncio
 import aiohttp
 import sys
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Optional
 from loguru import logger
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
 from .config import Config, get_config
 
 class LoadManager:
     def __init__(self, config: Config, fullscreen_mode: bool = False):
         self.config = config
-        self.server_loads: Dict[str, dict] = {}  # 服务器负载指标字典
-        self.server_status: Dict[str, bool] = {}  # 服务器状态
-        self.last_updated: Dict[str, datetime] = {}  # 最后更新时间
+        self.server_loads: dict[str, dict] = {}  # 服务器负载指标字典
+        self.last_updated: dict[str, datetime] = {}  # 最后更新时间
         self.load_check_lock = asyncio.Lock()
         self.fullscreen_mode = fullscreen_mode
 
@@ -47,7 +45,7 @@ class LoadManager:
                 'process_max_fds': 65535,
                 'system_load': 0
             }
-            self.server_status[server.url] = True  # 默认健康
+            # 服务器状态现在统一使用 config 中的 is_healthy 字段
             self.last_updated[server.url] = datetime.now()
 
     async def get_server_load(self, server_url: str) -> Optional[dict]:
@@ -159,13 +157,10 @@ class LoadManager:
             load = await self.get_server_load(server_url)
             if load is not None:
                 self.server_loads[server_url] = load
-                self.server_status[server_url] = True
                 self.last_updated[server_url] = datetime.now()
             else:
-                self.server_status[server_url] = False
                 logger.warning(f"Failed to get metrics from {server_url}")
         except Exception as e:
-            self.server_status[server_url] = False
             logger.error(f"Error updating load for {server_url}: {e}")
 
     def get_load_stats(self) -> dict:
@@ -181,7 +176,7 @@ class LoadManager:
                     "max_capacity": server.max_concurrent_requests,
                     "available_capacity": max(0, server.max_concurrent_requests - self.server_loads.get(server.url, {}).get('system_load', 0)),
                     "utilization": min(100, (self.server_loads.get(server.url, {}).get('system_load', 0) / server.max_concurrent_requests * 100)) if server.max_concurrent_requests > 0 else 0,
-                    "status": self.server_status.get(server.url, False),
+                    "status": server.is_healthy,
                     "last_updated": self.last_updated.get(server.url, None).isoformat() if self.last_updated.get(server.url, None) else None,
                     "detailed_metrics": {
                         "num_requests_running": self.server_loads.get(server.url, {}).get('num_requests_running', 0),
@@ -219,10 +214,12 @@ class LoadManager:
             for i, server in enumerate(self.config.servers, 1):
                 server_name = server.url  # 显示完整的 server_url
                 load_info = stats["server_loads"][server.url]
-                current_load = load_info["current_load"]
+                # current_load = load_info["current_load"]
                 max_capacity = load_info["max_capacity"]
                 utilization = load_info["utilization"]
-                status = load_info["status"]
+                # 获取服务器健康状态 - 统一使用 config 中的状态
+                server_config = self.config.get_server_by_url(server.url)
+                status = server_config.is_healthy if server_config else False
 
                 # 获取详细指标
                 detailed_metrics = load_info["detailed_metrics"]

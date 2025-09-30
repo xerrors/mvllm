@@ -10,7 +10,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Use the new CLI
-from app.cli import app
+from mvllm.cli import app
 
 if __name__ == "__main__":
     app()

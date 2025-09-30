@@ -33,8 +33,8 @@ vLLM Router provides a unified entry point that intelligently distributes reques
 ### Installation
 
 ```bash
-git clone https://github.com/xerrors/vllm-router.git
-cd vllm-router
+git clone https://github.com/xerrors/mvllm.git
+cd mvllm
 uv sync
 ```
 
@@ -66,13 +66,13 @@ max_retries = 3
 
 ```bash
 # Production mode (fullscreen monitoring)
-vllm-router run
+mvllm run
 
 # Development mode (console logging)
-vllm-router run --console
+mvllm run --console
 
 # Custom port
-vllm-router run --port 8888
+mvllm run --port 8888
 ```
 
 ## Usage Examples
@@ -110,8 +110,8 @@ curl http://localhost:8888/load-stats
 ### Docker
 
 ```bash
-docker build -t vllm-router .
-docker run -d -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router
+docker build -t mvllm .
+docker run -d -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml mvllm
 ```
 
 ### Docker Compose
@@ -119,7 +119,7 @@ docker run -d -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router
 ```yaml
 version: '3.8'
 services:
-  vllm-router:
+  mvllm:
     build: .
     ports:
       - "8888:8888"

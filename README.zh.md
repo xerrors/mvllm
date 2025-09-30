@@ -34,8 +34,8 @@ vLLM Router 提供统一的入口，智能分配请求到最佳服务器。
 ### 安装
 
 ```bash
-git clone https://github.com/xerrors/vllm-router.git
-cd vllm-router
+git clone https://github.com/xerrors/mvllm.git
+cd mvllm
 uv sync
 ```
 
@@ -67,13 +67,13 @@ max_retries = 3
 
 ```bash
 # 生产模式（全屏监控）
-vllm-router run
+mvllm run
 
 # 开发模式（控制台日志）
-vllm-router run --console
+mvllm run --console
 
 # 自定义端口
-vllm-router run --port 8888
+mvllm run --port 8888
 ```
 
 ## 使用示例
@@ -111,8 +111,8 @@ curl http://localhost:8888/load-stats
 ### Docker
 
 ```bash
-docker build -t vllm-router .
-docker run -d -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router
+docker build -t mvllm .
+docker run -d -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml mvllm
 ```
 
 ### Docker Compose
@@ -120,7 +120,7 @@ docker run -d -p 8888:8888 -v $(pwd)/servers.toml:/app/servers.toml vllm-router
 ```yaml
 version: '3.8'
 services:
-  vllm-router:
+  mvllm:
     build: .
     ports:
       - "8888:8888"

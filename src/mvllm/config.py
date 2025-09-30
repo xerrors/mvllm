@@ -5,7 +5,6 @@ Configuration management for vLLM Router
 import os
 import toml
 import httpx
-import asyncio
 from typing import List, Optional, Dict, Tuple
 from pydantic import BaseModel, Field, validator
 from datetime import datetime

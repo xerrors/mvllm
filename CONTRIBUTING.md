@@ -7,15 +7,15 @@ Thank you for your interest in contributing to vLLM Router! This document provid
 1. **Fork the repository** on GitHub
 2. **Clone your fork** locally:
    ```bash
-   git clone https://github.com/your-username/vllm-router.git
-   cd vllm-router
+   git clone https://github.com/your-username/mvllm.git
+   cd mvllm
    ```
 
 3. **Set up the development environment**:
    ```bash
    # Install dependencies
    uv sync
-   
+
    # Install development dependencies
    uv add --dev pytest pytest-asyncio httpx black isort flake8
    ```
