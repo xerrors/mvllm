@@ -48,6 +48,12 @@ def run(
         "INFO",
         "--log-level",
         help="Logging level (DEBUG, INFO, WARNING, ERROR)"
+    ),
+    model: bool = typer.Option(
+        False,
+        "--model",
+        "-m",
+        help="Show model information in the server display"
     )
 ):
     """Run the vLLM Router server"""
@@ -56,6 +62,7 @@ def run(
     os.environ["LOG_TO_CONSOLE"] = str(console).lower()
     os.environ["LOG_LEVEL"] = log_level
     os.environ["CONFIG_PATH"] = config
+    os.environ["SHOW_MODELS"] = str(model).lower()
 
     # Set uvicorn arguments
     sys.argv = [

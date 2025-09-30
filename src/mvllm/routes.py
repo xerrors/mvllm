@@ -10,12 +10,22 @@ from .load_manager import LoadManager, get_load_manager
 
 router = APIRouter()
 
-async def _select_optimal_server(config: Config, load_manager: LoadManager) -> str:
-    """选择当前负载最小的健康服务器"""
-    healthy_servers = config.get_healthy_servers()
+async def _select_optimal_server(config: Config, load_manager: LoadManager, model: str = None) -> str:
+    """选择当前负载最小的健康服务器，可选地过滤支持指定模型的服务器"""
+    if model:
+        # 如果指定了模型，只选择支持该模型的健康服务器
+        healthy_servers = config.get_healthy_servers_supporting_model(model)
+        if not healthy_servers:
+            raise HTTPException(status_code=503, detail=f"No healthy servers available that support model: {model}")
+    else:
+        # 如果没有指定模型，选择所有健康服务器
+        healthy_servers = config.get_healthy_servers()
 
     if not healthy_servers:
-        raise HTTPException(status_code=503, detail="No healthy servers available")
+        if model:
+            raise HTTPException(status_code=503, detail=f"No servers available that support model: {model}")
+        else:
+            raise HTTPException(status_code=503, detail="No healthy servers available")
 
     # 获取实时负载数据
     load_stats = load_manager.get_load_stats()
@@ -72,6 +82,31 @@ async def _select_optimal_server(config: Config, load_manager: LoadManager) -> s
     logger.info(f"Randomly selected server {selected.url}")
     return selected.url
 
+async def _extract_model_from_request(request: Request) -> str:
+    """从请求中提取模型名称"""
+    try:
+        # 对于聊天完成和普通完成请求，模型通常在请求体中
+        if request.method in ["POST"] and request.url.path in ["/v1/chat/completions", "/v1/completions"]:
+            # 读取请求体
+            body = await request.body()
+            if not body:
+                return None
+
+            import json
+            try:
+                request_data = json.loads(body)
+                model = request_data.get("model")
+                return model
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        # 从查询参数中获取模型（如果适用）
+        model = request.query_params.get("model")
+        return model
+
+    except Exception:
+        return None
+
 async def _forward_request_with_retry(
     request: Request,
     path: str,
@@ -82,30 +117,42 @@ async def _forward_request_with_retry(
     """
     直接转发请求到最优服务器，支持重试逻辑
     """
-    # 获取请求体和头部信息
-    body = await request.body()
+    # 获取头部信息
     headers = dict(request.headers)
     headers.pop('host', None)  # 避免头部冲突
+
+    # 提取模型信息
+    model = await _extract_model_from_request(request)
 
     retries = 0
     max_retries = config.app_config.max_retries
 
     while retries <= max_retries:
         try:
-            # 选择最优服务器
-            server_url = await _select_optimal_server(config, load_manager)
+            # 选择最优服务器（根据模型过滤）
+            server_url = await _select_optimal_server(config, load_manager, model)
             target_url = f"{server_url}{path}"
 
-            logger.info(f"Forwarding {method} {path} to {target_url} (attempt {retries + 1}/{max_retries + 1})")
+            model_info = f" (model: {model})" if model else ""
+            logger.info(f"Forwarding {method} {path} to {target_url}{model_info} (attempt {retries + 1}/{max_retries + 1})")
 
             # 转发请求
             async with httpx.AsyncClient(timeout=config.app_config.request_timeout) as client:
-                response = await client.request(
-                    method=method,
-                    url=target_url,
-                    content=body,
-                    headers=headers
-                )
+                # 对于需要请求体的请求，我们需要重新读取请求体
+                if method in ["POST", "PUT", "PATCH"]:
+                    body = await request.body()
+                    response = await client.request(
+                        method=method,
+                        url=target_url,
+                        content=body,
+                        headers=headers
+                    )
+                else:
+                    response = await client.request(
+                        method=method,
+                        url=target_url,
+                        headers=headers
+                    )
 
             response.raise_for_status()  # 检查响应状态
 
@@ -128,7 +175,7 @@ async def _forward_request_with_retry(
                 )
             else:
                 # JSON响应
-                logger.info(f"Request {method} {path} completed successfully on {server_url}")
+                logger.info(f"Request {method} {path} completed successfully on {server_url}{model_info}")
                 return JSONResponse(
                     content=response.json(),
                     status_code=response.status_code,

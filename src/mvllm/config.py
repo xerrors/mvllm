@@ -37,6 +37,10 @@ class ServerConfig(BaseModel):
     # 主动健康检查相关字段
     health_stats: 'HealthCheckStats' = Field(default_factory=lambda: HealthCheckStats())
 
+    # 模型信息
+    supported_models: List[str] = Field(default_factory=list)  # 服务器支持的模型列表
+    models_last_updated: Optional[datetime] = Field(default=None)  # 模型信息最后更新时间
+
     @validator('url')
     def validate_url(cls, v):
         if not v.startswith(('http://', 'https://')):
@@ -287,3 +291,44 @@ class Config:
 
         logger.info(f"Completed health checks: {len(results)} servers checked")
         return results
+
+    async def fetch_server_models(self, server: ServerConfig) -> None:
+        """Fetch supported models from a vLLM server"""
+        try:
+            async with httpx.AsyncClient(timeout=self.app_config.health_check_timeout) as client:
+                response = await client.get(f"{server.url}/v1/models")
+                response.raise_for_status()
+
+                models_data = response.json()
+                models = []
+
+                # vLLM 的 /v1/models API 返回格式通常是 {"object": "list", "data": [{"id": "model_name", ...}, ...]}
+                if "data" in models_data:
+                    for model_info in models_data["data"]:
+                        if "id" in model_info:
+                            models.append(model_info["id"])
+
+                server.supported_models = models
+                server.models_last_updated = datetime.now()
+                logger.info(f"Updated models for {server.url}: {len(models)} models - {models}")
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch models from {server.url}: {e}")
+            # 不更新模型信息，如果获取失败
+
+    async def update_all_server_models(self) -> None:
+        """Update model information for all servers"""
+        logger.info("Updating model information for all servers...")
+
+        for server in self.servers:
+            await self.fetch_server_models(server)
+
+        logger.info("Model information update completed")
+
+    def get_servers_supporting_model(self, model_name: str) -> List[ServerConfig]:
+        """Get list of servers that support the specified model"""
+        return [server for server in self.servers if model_name in server.supported_models]
+
+    def get_healthy_servers_supporting_model(self, model_name: str) -> List[ServerConfig]:
+        """Get list of healthy servers that support the specified model"""
+        return [server for server in self.get_servers_supporting_model(model_name) if server.is_healthy]

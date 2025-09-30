@@ -40,7 +40,9 @@ class ServerManager:
                     "healthy": server.is_healthy,
                     "current_load": load_stats["server_loads"].get(server.url, {}).get("current_load", 0),
                     "utilization": load_stats["server_loads"].get(server.url, {}).get("utilization", 0),
-                    "last_check": server.last_check.isoformat() if server.last_check else None
+                    "last_check": server.last_check.isoformat() if server.last_check else None,
+                    "supported_models": server.supported_models,
+                    "models_last_updated": server.models_last_updated.isoformat() if server.models_last_updated else None
                 }
                 for server in self.config.servers
             ]

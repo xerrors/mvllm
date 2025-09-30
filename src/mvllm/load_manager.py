@@ -15,12 +15,13 @@ from rich.panel import Panel
 from .config import Config, get_config
 
 class LoadManager:
-    def __init__(self, config: Config, fullscreen_mode: bool = False):
+    def __init__(self, config: Config, fullscreen_mode: bool = False, show_models: bool = False):
         self.config = config
         self.server_loads: dict[str, dict] = {}  # 服务器负载指标字典
         self.last_updated: dict[str, datetime] = {}  # 最后更新时间
         self.load_check_lock = asyncio.Lock()
         self.fullscreen_mode = fullscreen_mode
+        self.show_models = show_models  # 是否显示模型信息
 
         # Rich console for status display
         if fullscreen_mode:
@@ -203,6 +204,11 @@ class LoadManager:
             table = Table(show_header=True, header_style="bold blue", box=None)
             table.add_column("#", style="cyan", justify="right", width=2)
             table.add_column("Server", style="green", width=25)  # 为完整URL预留足够空间
+
+            # 只有在指定了模型参数时才显示模型列
+            if self.show_models:
+                table.add_column("Models", style="blue", width=20)  # 新增模型名称列
+
             table.add_column("Running", style="yellow", justify="right", width=8)
             table.add_column("Waiting", style="bright_yellow", justify="right", width=8)
             table.add_column("Capacity", style="magenta", justify="right", width=8)
@@ -211,12 +217,14 @@ class LoadManager:
             # 服务器负载信息
             server_rows = []
             current_time = datetime.now().strftime('%H:%M:%S')
-            for i, server in enumerate(self.config.servers, 1):
+            row_index = 1
+
+            for server in self.config.servers:
                 server_name = server.url  # 显示完整的 server_url
                 load_info = stats["server_loads"][server.url]
-                # current_load = load_info["current_load"]
                 max_capacity = load_info["max_capacity"]
                 utilization = load_info["utilization"]
+
                 # 获取服务器健康状态 - 统一使用 config 中的状态
                 server_config = self.config.get_server_by_url(server.url)
                 status = server_config.is_healthy if server_config else False
@@ -226,10 +234,21 @@ class LoadManager:
                 running = detailed_metrics["num_requests_running"]
                 waiting = detailed_metrics["num_requests_waiting"]
 
+                # 格式化模型名称显示
+                if server.supported_models:
+                    # 显示前几个模型，如果太多则显示数量
+                    if len(server.supported_models) <= 3:
+                        models_display = ", ".join(server.supported_models)
+                    else:
+                        models_display = f"{', '.join(server.supported_models[:2])} (+{len(server.supported_models)-2})"
+                else:
+                    models_display = "[dim]No models[/dim]"
+
                 # 根据负载状态设置颜色
                 if not status:
                     # 为不健康的服务器添加删除线
                     server_name = f"[red strike]{server_name}[/red strike]"
+                    models_display = f"[red strike]{models_display}[/red strike]"
                     running_str = f"[red]{running}[/red]"
                     waiting_str = f"[red]{waiting}[/red]"
                     utilization_str = f"[red]{utilization:.1f}%[/red]"
@@ -249,14 +268,27 @@ class LoadManager:
                     waiting_str = f"[green]{waiting}[/green]"
                     utilization_str = f"[green]{utilization:.1f}%[/green]"
 
-                server_rows.append((
-                    f"{i}",
-                    server_name,
-                    running_str,
-                    waiting_str,
-                    f"{max_capacity}",
-                    utilization_str
-                ))
+                # 根据是否显示模型列来构建行数据
+                if self.show_models:
+                    server_rows.append((
+                        f"{row_index}",
+                        server_name,
+                        models_display,
+                        running_str,
+                        waiting_str,
+                        f"{max_capacity}",
+                        utilization_str
+                    ))
+                else:
+                    server_rows.append((
+                        f"{row_index}",
+                        server_name,
+                        running_str,
+                        waiting_str,
+                        f"{max_capacity}",
+                        utilization_str
+                    ))
+                row_index += 1
 
             # 添加服务器行
             for row in server_rows:
@@ -281,10 +313,12 @@ class LoadManager:
                 health_status = "Mostly unhealthy"
 
             # 根据模式选择不同的面板样式
+            displayed_servers = len(server_rows)
+
             if self.fullscreen_mode:
                 # 全屏模式：更简洁的标题和样式
                 panel_title = f"vLLM Router Monitor ({current_time})"
-                panel_subtitle = f"{healthy_count}/{total_servers} Servers | {total_running} Running | {total_waiting} Waiting | {overall_utilization:.1f}% Usage"
+                panel_subtitle = f"{displayed_servers}/{total_servers} Servers | {total_running} Running | {total_waiting} Waiting | {overall_utilization:.1f}% Usage"
                 border_style = "bright_blue"
             else:
                 # 普通模式：原有的详细样式
@@ -397,11 +431,11 @@ class LoadManager:
 # 全局负载管理器实例
 _global_load_manager = None
 
-def get_load_manager(fullscreen_mode: bool = False) -> LoadManager:
+def get_load_manager(fullscreen_mode: bool = False, show_models: bool = False) -> LoadManager:
     """获取全局负载管理器实例"""
     global _global_load_manager
     if _global_load_manager is None:
         config = get_config()
-        _global_load_manager = LoadManager(config, fullscreen_mode=fullscreen_mode)
-        logger.info(f"Global load manager instance created (fullscreen={fullscreen_mode})")
+        _global_load_manager = LoadManager(config, fullscreen_mode=fullscreen_mode, show_models=show_models)
+        logger.info(f"Global load manager instance created (fullscreen={fullscreen_mode}, show_models={show_models})")
     return _global_load_manager

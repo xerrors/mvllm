@@ -115,13 +115,21 @@ async def lifespan(app: FastAPI):
     console_enabled = os.getenv("LOG_TO_CONSOLE", "false").lower() == "true"
     fullscreen_mode = not console_enabled  # 无 console 时使用全屏模式
 
-    load_manager_instance = get_load_manager(fullscreen_mode=fullscreen_mode)
+    # 获取是否显示模型信息的参数
+    show_models = os.getenv("SHOW_MODELS", "false").lower() == "true"
+
+    load_manager_instance = get_load_manager(fullscreen_mode=fullscreen_mode, show_models=show_models)
     await load_manager_instance.start_load_monitor(interval=0.5, use_rich=True)  # 每0.5秒更新一次负载状态，使用Rich显示
 
     if fullscreen_mode:
         logger.info("vLLM Router running in fullscreen monitor mode (console disabled)")
     else:
         logger.info("vLLM Router running with console output enabled")
+
+    # Update model information for all servers
+    logger.info("Fetching model information from all servers...")
+    await config.update_all_server_models()
+    logger.info("Model information update completed")
 
     # Start active health check task
     if config.app_config.enable_active_health_check:
@@ -176,6 +184,16 @@ async def active_health_check_loop(config, interval: int):
 
             # Perform health checks on all servers
             health_results = await config.perform_health_checks()
+
+            # Update model information periodically (every 10 health check cycles)
+            # This prevents overwhelming the servers with model requests
+            model_update_counter = getattr(active_health_check_loop, 'counter', 0)
+            model_update_counter += 1
+            setattr(active_health_check_loop, 'counter', model_update_counter)
+
+            if model_update_counter % 10 == 0:  # Update models every 10 cycles
+                logger.info("Updating model information during health check cycle...")
+                await config.update_all_server_models()
 
             # Log summary of health check results
             healthy_count = sum(1 for is_healthy, _ in health_results.values() if is_healthy)
@@ -283,7 +301,9 @@ async def health_check():
             "success_rate": server.health_stats.success_rate,
             "avg_response_time": server.health_stats.avg_response_time,
             "last_response_time": server.health_stats.last_response_time,
-            "total_checks": server.health_stats.total_checks
+            "total_checks": server.health_stats.total_checks,
+            "supported_models": server.supported_models,
+            "models_last_updated": server.models_last_updated.isoformat() if server.models_last_updated else None
         }
         server_details.append(server_info)
 
@@ -330,6 +350,28 @@ async def load_stats():
             "total_capacity": stats["summary"]["total_capacity"],
             "overall_utilization_percent": stats["summary"]["overall_utilization"]
         }
+    }
+
+@app.get("/server-models")
+async def server_models():
+    """Get all servers and their supported models"""
+    config = get_config()
+
+    # Update model information if needed (force refresh)
+    await config.update_all_server_models()
+
+    server_models = {}
+    for server in config.servers:
+        server_models[server.url] = {
+            "supported_models": server.supported_models,
+            "models_last_updated": server.models_last_updated.isoformat() if server.models_last_updated else None,
+            "healthy": server.is_healthy
+        }
+
+    return {
+        "servers": server_models,
+        "total_servers": len(config.servers),
+        "healthy_servers": len(config.get_healthy_servers())
     }
 
 @app.exception_handler(HTTPException)
