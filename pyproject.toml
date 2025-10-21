@@ -3,7 +3,26 @@ name = "mvllm"
 version = "0.1.0"
 description = "A FastAPI-based load balancer for vLLM servers with OpenAI-compatible API"
 readme = "README.md"
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
+authors = [
+    { name = "Wenjie Zhang", email = "wenjie.zhang@stu.jiangnan.edu.cn" }
+]
+keywords = ["vllm", "load-balancer", "fastapi", "llm", "inference", "gpu", "openai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: System :: Distributed Computing",
+    "Framework :: FastAPI",
+]
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn>=0.24.0",
@@ -17,12 +36,20 @@ dependencies = [
     "rich>=14.1.0",
     "aiohttp>=3.12.15",
     "typer>=0.19.2",
-    "pytest>=8.4.2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/xerrors/mvllm"
+Repository = "https://github.com/xerrors/mvllm"
+Issues = "https://github.com/xerrors/mvllm/issues"
+Documentation = "https://github.com/xerrors/mvllm#readme"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["src/mvllm"]
 
 [project.scripts]
 mvllm = "mvllm.cli:app"

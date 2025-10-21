@@ -5,9 +5,11 @@ Server manager for vLLM Router
 from .config import Config, ServerConfig, get_config
 from .load_manager import get_load_manager
 
+
 def get_server_manager():
     """Get the global ServerManager instance"""
     return ServerManager(get_config())
+
 
 class ServerManager:
     def __init__(self, config: Config):
@@ -38,12 +40,20 @@ class ServerManager:
                 {
                     "url": server.url,
                     "healthy": server.is_healthy,
-                    "current_load": load_stats["server_loads"].get(server.url, {}).get("current_load", 0),
-                    "utilization": load_stats["server_loads"].get(server.url, {}).get("utilization", 0),
-                    "last_check": server.last_check.isoformat() if server.last_check else None,
+                    "current_load": load_stats["server_loads"]
+                    .get(server.url, {})
+                    .get("current_load", 0),
+                    "utilization": load_stats["server_loads"]
+                    .get(server.url, {})
+                    .get("utilization", 0),
+                    "last_check": server.last_check.isoformat()
+                    if server.last_check
+                    else None,
                     "supported_models": server.supported_models,
-                    "models_last_updated": server.models_last_updated.isoformat() if server.models_last_updated else None
+                    "models_last_updated": server.models_last_updated.isoformat()
+                    if server.models_last_updated
+                    else None,
                 }
                 for server in self.config.servers
-            ]
+            ],
         }

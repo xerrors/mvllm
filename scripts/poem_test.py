@@ -20,7 +20,10 @@ LONG_INTERVAL = 10.0  # 10秒
 # 静夜诗内容
 POEM_CONTENT = f"{random.randint(1, 1000000)}请背诵一下《{random.choice(['出师表', '静夜思', '将进酒', '登高'])}》前{random.randint(1, 100)}句"
 
-async def send_completion_request(client: httpx.AsyncClient, request_num: int, batch_num: int) -> bool:
+
+async def send_completion_request(
+    client: httpx.AsyncClient, request_num: int, batch_num: int
+) -> bool:
     """发送单个completion请求"""
     try:
         payload = {
@@ -28,12 +31,12 @@ async def send_completion_request(client: httpx.AsyncClient, request_num: int, b
             "messages": [
                 {
                     "role": "user",
-                    "content": f"[第{batch_num}批-第{request_num}次] {POEM_CONTENT}"
+                    "content": f"[第{batch_num}批-第{request_num}次] {POEM_CONTENT}",
                 }
             ],
             "max_tokens": 500,
             "temperature": 0.7,
-            "stream": False
+            "stream": False,
         }
 
         start_time = time.time()
@@ -41,21 +44,26 @@ async def send_completion_request(client: httpx.AsyncClient, request_num: int, b
             f"{BASE_URL}/chat/completions",
             json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=30.0
+            timeout=30.0,
         )
         end_time = time.time()
 
         if response.status_code == 200:
             # result = response.json()
-            logger.info(f"✅ 请求成功 [第{batch_num}批-第{request_num}次] 耗时: {end_time - start_time:.2f}s")
+            logger.info(
+                f"✅ 请求成功 [第{batch_num}批-第{request_num}次] 耗时: {end_time - start_time:.2f}s"
+            )
             return True
         else:
-            logger.error(f"❌ 请求失败 [第{batch_num}批-第{request_num}次] HTTP {response.status_code}: {response.text}")
+            logger.error(
+                f"❌ 请求失败 [第{batch_num}批-第{request_num}次] HTTP {response.status_code}: {response.text}"
+            )
             return False
 
     except Exception as e:
         logger.error(f"❌ 请求异常 [第{batch_num}批-第{request_num}次]: {e}")
         return False
+
 
 async def run_batch(client: httpx.AsyncClient, batch_num: int):
     """运行一个批次的请求 - 每1秒异步发送一个请求"""
@@ -77,10 +85,13 @@ async def run_batch(client: httpx.AsyncClient, batch_num: int):
     logger.info(f"📊 第 {batch_num} 批完成: 成功 {success_count}/{BATCH_SIZE}")
     return success_count
 
+
 async def main():
     """主函数"""
     logger.info("🌙 开始静夜思连续请求测试...")
-    logger.info(f"配置: 模型={MODEL}, 批次大小={BATCH_SIZE}, 短间隔={SHORT_INTERVAL}s, 长间隔={LONG_INTERVAL}s")
+    logger.info(
+        f"配置: 模型={MODEL}, 批次大小={BATCH_SIZE}, 短间隔={SHORT_INTERVAL}s, 长间隔={LONG_INTERVAL}s"
+    )
 
     batch_num = 1
     total_success = 0
@@ -95,8 +106,12 @@ async def main():
                 total_requests += BATCH_SIZE
 
                 # 显示统计信息
-                success_rate = (total_success / total_requests) * 100 if total_requests > 0 else 0
-                logger.info(f"📈 总体统计: 成功 {total_success}/{total_requests} ({success_rate:.1f}%)")
+                success_rate = (
+                    (total_success / total_requests) * 100 if total_requests > 0 else 0
+                )
+                logger.info(
+                    f"📈 总体统计: 成功 {total_success}/{total_requests} ({success_rate:.1f}%)"
+                )
 
                 # 等待10秒（除了第一次）
                 if batch_num > 0:
@@ -107,10 +122,15 @@ async def main():
 
     except KeyboardInterrupt:
         logger.info("⏹️ 测试被用户中断")
-        logger.info(f"📊 最终统计: 成功 {total_success}/{total_requests} ({success_rate:.1f}%)")
+        logger.info(
+            f"📊 最终统计: 成功 {total_success}/{total_requests} ({success_rate:.1f}%)"
+        )
     except Exception as e:
         logger.error(f"💥 测试过程中发生错误: {e}")
-        logger.info(f"📊 最终统计: 成功 {total_success}/{total_requests} ({success_rate:.1f}%)")
+        logger.info(
+            f"📊 最终统计: 成功 {total_success}/{total_requests} ({success_rate:.1f}%)"
+        )
+
 
 if __name__ == "__main__":
     # 配置日志
@@ -119,7 +139,7 @@ if __name__ == "__main__":
         rotation="10 MB",
         retention="1 day",
         level="INFO",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
     )
 
     # 运行测试

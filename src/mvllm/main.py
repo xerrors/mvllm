@@ -15,9 +15,11 @@ from mvllm.routes import router
 
 from .config import get_config
 from .load_manager import get_load_manager
+from . import __version__
 
 # Remove default logging handler
 logger.remove()
+
 
 # Configure logging with Rich console
 def setup_logging():
@@ -30,6 +32,7 @@ def setup_logging():
     # Configure uvicorn logging to work with Rich
     # Suppress uvicorn's default logger to avoid conflicts
     import logging
+
     logging.getLogger("uvicorn").handlers.clear()
     logging.getLogger("uvicorn.access").handlers.clear()
     logging.getLogger("uvicorn.error").handlers.clear()
@@ -50,7 +53,7 @@ def setup_logging():
             console_handler,
             level=os.getenv("LOG_LEVEL", "INFO"),
             format="{message}",
-            filter=lambda record: not record["extra"].get("status_update", False)
+            filter=lambda record: not record["extra"].get("status_update", False),
         )
         logger.info("Console logging enabled")
 
@@ -62,7 +65,7 @@ def setup_logging():
         rotation="10 MB",
         retention="7 days",
         compression="zip",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     # Error log file
@@ -73,7 +76,7 @@ def setup_logging():
         rotation="10 MB",
         retention="30 days",
         compression="zip",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     # Clean structured log file for analytics
@@ -84,7 +87,7 @@ def setup_logging():
         rotation="50 MB",
         retention="7 days",
         compression="zip",
-        encoding="utf-8"
+        encoding="utf-8",
     )
 
     # Log startup status
@@ -93,11 +96,13 @@ def setup_logging():
     else:
         logger.info("Console logging disabled (use --console to enable)")
 
+
 # Initialize logging - will be called again in main() with proper environment variables
 # setup_logging()
 
 # Global variables for services
 load_manager = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -111,15 +116,21 @@ async def lifespan(app: FastAPI):
     config = get_config()
 
     # Initialize load manager
-    # 检测是否启用 console 输出，决定是否使用全屏模式
+    # Detect if console output is enabled to decide whether to use fullscreen mode
     console_enabled = os.getenv("LOG_TO_CONSOLE", "false").lower() == "true"
-    fullscreen_mode = not console_enabled  # 无 console 时使用全屏模式
+    fullscreen_mode = (
+        not console_enabled
+    )  # Use fullscreen mode when console is disabled
 
-    # 获取是否显示模型信息的参数
+    # Get parameter for whether to display model information
     show_models = os.getenv("SHOW_MODELS", "false").lower() == "true"
 
-    load_manager_instance = get_load_manager(fullscreen_mode=fullscreen_mode, show_models=show_models)
-    await load_manager_instance.start_load_monitor(interval=0.5, use_rich=True)  # 每0.5秒更新一次负载状态，使用Rich显示
+    load_manager_instance = get_load_manager(
+        fullscreen_mode=fullscreen_mode, show_models=show_models
+    )
+    await load_manager_instance.start_load_monitor(
+        interval=0.5, use_rich=True
+    )  # Update load status every 0.5 seconds, use Rich display
 
     if fullscreen_mode:
         logger.info("vLLM Router running in fullscreen monitor mode (console disabled)")
@@ -136,7 +147,9 @@ async def lifespan(app: FastAPI):
         health_check_task = asyncio.create_task(
             active_health_check_loop(config, config.app_config.health_check_interval)
         )
-        logger.info(f"Active health check started with interval: {config.app_config.health_check_interval}s")
+        logger.info(
+            f"Active health check started with interval: {config.app_config.health_check_interval}s"
+        )
     else:
         health_check_task = None
         logger.info("Active health check disabled")
@@ -145,7 +158,9 @@ async def lifespan(app: FastAPI):
     config_reload_task = asyncio.create_task(
         config_reload_loop(config, config.app_config.config_reload_interval)
     )
-    logger.info(f"Config reload task started with interval: {config.app_config.config_reload_interval}s")
+    logger.info(
+        f"Config reload task started with interval: {config.app_config.config_reload_interval}s"
+    )
 
     logger.info("vLLM Router started successfully")
 
@@ -174,6 +189,7 @@ async def lifespan(app: FastAPI):
 
     logger.info("vLLM Router shutdown complete")
 
+
 async def active_health_check_loop(config, interval: int):
     """Active health check loop that runs periodically"""
     logger.info(f"Starting active health check loop with interval: {interval}s")
@@ -187,25 +203,31 @@ async def active_health_check_loop(config, interval: int):
 
             # Update model information periodically (every 10 health check cycles)
             # This prevents overwhelming the servers with model requests
-            model_update_counter = getattr(active_health_check_loop, 'counter', 0)
+            model_update_counter = getattr(active_health_check_loop, "counter", 0)
             model_update_counter += 1
-            setattr(active_health_check_loop, 'counter', model_update_counter)
+            setattr(active_health_check_loop, "counter", model_update_counter)
 
             if model_update_counter % 10 == 0:  # Update models every 10 cycles
                 logger.info("Updating model information during health check cycle...")
                 await config.update_all_server_models()
 
             # Log summary of health check results
-            healthy_count = sum(1 for is_healthy, _ in health_results.values() if is_healthy)
+            healthy_count = sum(
+                1 for is_healthy, _ in health_results.values() if is_healthy
+            )
             total_count = len(health_results)
 
             if total_count > 0:
-                logger.info(f"Health check completed: {healthy_count}/{total_count} servers healthy")
+                logger.info(
+                    f"Health check completed: {healthy_count}/{total_count} servers healthy"
+                )
 
                 # Log detailed results for unhealthy servers
                 for server_url, (is_healthy, response_time) in health_results.items():
                     if not is_healthy:
-                        logger.warning(f"Server {server_url} is unhealthy (response_time: {response_time:.2f}s)")
+                        logger.warning(
+                            f"Server {server_url} is unhealthy (response_time: {response_time:.2f}s)"
+                        )
 
         except asyncio.CancelledError:
             logger.info("Active health check loop cancelled")
@@ -213,6 +235,7 @@ async def active_health_check_loop(config, interval: int):
         except Exception as e:
             logger.error(f"Error in active health check loop: {e}")
             await asyncio.sleep(interval)  # Continue even after errors
+
 
 async def config_reload_loop(config, interval: int):
     """Config reload loop that runs periodically"""
@@ -229,7 +252,9 @@ async def config_reload_loop(config, interval: int):
                 # Log new configuration details
                 healthy_servers = config.get_healthy_servers()
                 total_servers = len(config.servers)
-                logger.info(f"Configuration reloaded: {len(healthy_servers)}/{total_servers} servers healthy")
+                logger.info(
+                    f"Configuration reloaded: {len(healthy_servers)}/{total_servers} servers healthy"
+                )
 
         except asyncio.CancelledError:
             logger.info("Config reload loop cancelled")
@@ -238,12 +263,13 @@ async def config_reload_loop(config, interval: int):
             logger.error(f"Error in config reload loop: {e}")
             await asyncio.sleep(interval)  # Continue even after errors
 
+
 # Create FastAPI application
 app = FastAPI(
     title="vLLM Router",
     description="A FastAPI-based load balancer for vLLM servers with OpenAI-compatible API",
-    version="0.1.0",
-    lifespan=lifespan
+    version=__version__,
+    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -258,14 +284,12 @@ app.add_middleware(
 # Include routes
 app.include_router(router, prefix="/v1")
 
+
 @app.get("/")
 async def root():
     """Root endpoint"""
-    return {
-        "service": "vLLM Router",
-        "version": "0.1.0",
-        "status": "running"
-    }
+    return {"service": "vLLM Router", "version": __version__, "status": "running"}
+
 
 @app.get("/health")
 async def health_check():
@@ -303,7 +327,9 @@ async def health_check():
             "last_response_time": server.health_stats.last_response_time,
             "total_checks": server.health_stats.total_checks,
             "supported_models": server.supported_models,
-            "models_last_updated": server.models_last_updated.isoformat() if server.models_last_updated else None
+            "models_last_updated": server.models_last_updated.isoformat()
+            if server.models_last_updated
+            else None,
         }
         server_details.append(server_info)
 
@@ -318,9 +344,10 @@ async def health_check():
             "health_check_enabled": config.app_config.enable_active_health_check,
             "health_check_interval": config.app_config.health_check_interval,
             "min_success_rate": config.app_config.health_check_min_success_rate,
-            "max_response_time": config.app_config.health_check_max_response_time
-        }
+            "max_response_time": config.app_config.health_check_max_response_time,
+        },
     }
+
 
 @app.get("/load-stats")
 async def load_stats():
@@ -328,7 +355,7 @@ async def load_stats():
     load_manager = get_load_manager()
     stats = load_manager.get_load_stats()
 
-    # 格式化输出更易读
+    # Format output for better readability
     return {
         "servers": [
             {
@@ -339,7 +366,7 @@ async def load_stats():
                 "utilization_percent": load_info["utilization"],
                 "status": load_info["status"],
                 "last_updated": load_info["last_updated"],
-                "detailed_metrics": load_info["detailed_metrics"]
+                "detailed_metrics": load_info["detailed_metrics"],
             }
             for server_url, load_info in stats["server_loads"].items()
         ],
@@ -348,9 +375,10 @@ async def load_stats():
             "healthy_servers": stats["healthy_servers"],
             "total_active_load": stats["summary"]["total_active_load"],
             "total_capacity": stats["summary"]["total_capacity"],
-            "overall_utilization_percent": stats["summary"]["overall_utilization"]
-        }
+            "overall_utilization_percent": stats["summary"]["overall_utilization"],
+        },
     }
+
 
 @app.get("/server-models")
 async def server_models():
@@ -364,15 +392,18 @@ async def server_models():
     for server in config.servers:
         server_models[server.url] = {
             "supported_models": server.supported_models,
-            "models_last_updated": server.models_last_updated.isoformat() if server.models_last_updated else None,
-            "healthy": server.is_healthy
+            "models_last_updated": server.models_last_updated.isoformat()
+            if server.models_last_updated
+            else None,
+            "healthy": server.is_healthy,
         }
 
     return {
         "servers": server_models,
         "total_servers": len(config.servers),
-        "healthy_servers": len(config.get_healthy_servers())
+        "healthy_servers": len(config.get_healthy_servers()),
     }
+
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -383,10 +414,11 @@ async def http_exception_handler(request: Request, exc: HTTPException):
             "error": {
                 "message": exc.detail,
                 "type": "http_error",
-                "code": exc.status_code
+                "code": exc.status_code,
             }
-        }
+        },
     )
+
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
@@ -396,7 +428,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         method=request.method,
         error_type=type(exc).__name__,
         error_message=str(exc),
-        status="unhandled_exception"
+        status="unhandled_exception",
     ).error("Unhandled exception occurred", exc_info=exc)
     return JSONResponse(
         status_code=500,
@@ -404,10 +436,11 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error": {
                 "message": "Internal server error",
                 "type": "internal_error",
-                "code": 500
+                "code": 500,
             }
-        }
+        },
     )
+
 
 def main():
     """Main entry point"""
@@ -416,6 +449,7 @@ def main():
 
     # Parse command line arguments for uvicorn
     import sys
+
     host = "0.0.0.0"
     port = 8888
     reload = False
@@ -442,10 +476,11 @@ def main():
         host=host,
         port=port,
         reload=reload,
-        log_config=None,  # 禁用 uvicorn 的日志
-        log_level="critical",  # 设置为最高级别，抑制日志输出
-        access_log=False,      # 禁用访问日志
+        log_config=None,  # Disable uvicorn's logging
+        log_level="critical",  # Set to highest level to suppress log output
+        access_log=False,  # Disable access logs
     )
+
 
 if __name__ == "__main__":
     main()

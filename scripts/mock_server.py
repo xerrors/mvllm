@@ -32,7 +32,7 @@ MOCK_SERVERS = [
         "model": "llama3.1:8b",
         "max_tokens": 2048,
         "response_delay": 5,  # seconds
-        "failure_rate": 0.05,   # 5% chance of failure
+        "failure_rate": 0.05,  # 5% chance of failure
         "slow_response_rate": 0.1,  # 10% chance of slow response
     },
     {
@@ -52,7 +52,7 @@ MOCK_SERVERS = [
         "response_delay": 8,
         "failure_rate": 0.08,
         "slow_response_rate": 0.15,
-    }
+    },
 ]
 
 # Global request counter for each server
@@ -68,7 +68,7 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
     app = FastAPI(
         title=f"Mock vLLM Server - {server_config['name']}",
         description=f"Mock server simulating {server_config['model']}",
-        version="0.1.0"
+        version="0.1.0",
     )
 
     # Add CORS middleware
@@ -88,7 +88,7 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
             "model": server_config["model"],
             "port": server_config["port"],
             "status": "running",
-            "requests_processed": request_counters[server_config["port"]]
+            "requests_processed": request_counters[server_config["port"]],
         }
 
     @app.get("/health")
@@ -113,9 +113,9 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
                     "id": server_config["model"],
                     "object": "model",
                     "created": int(time.time()),
-                    "owned_by": "mock-server"
+                    "owned_by": "mock-server",
                 }
-            ]
+            ],
         }
 
     @app.post("/v1/chat/completions")
@@ -157,18 +157,16 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
             "choices": [
                 {
                     "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": response_content
-                    },
-                    "finish_reason": "stop"
+                    "message": {"role": "assistant", "content": response_content},
+                    "finish_reason": "stop",
                 }
             ],
             "usage": {
                 "prompt_tokens": len(messages[-1]["content"].split()),
                 "completion_tokens": len(response_content.split()),
-                "total_tokens": len(messages[-1]["content"].split()) + len(response_content.split())
-            }
+                "total_tokens": len(messages[-1]["content"].split())
+                + len(response_content.split()),
+            },
         }
 
         if stream:
@@ -184,9 +182,9 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
                         {
                             "index": 0,
                             "delta": {"role": "assistant", "content": ""},
-                            "finish_reason": None
+                            "finish_reason": None,
                         }
-                    ]
+                    ],
                 }
                 yield f"data: {json.dumps(chunk_data)}\n\n"
 
@@ -208,7 +206,7 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
             return StreamingResponse(
                 stream_generator(),
                 media_type="text/plain",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
         else:
             # Regular response
@@ -247,17 +245,13 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
             "created": int(time.time()),
             "model": server_config["model"],
             "choices": [
-                {
-                    "index": 0,
-                    "text": response_content,
-                    "finish_reason": "stop"
-                }
+                {"index": 0, "text": response_content, "finish_reason": "stop"}
             ],
             "usage": {
                 "prompt_tokens": len(prompt.split()),
                 "completion_tokens": len(response_content.split()),
-                "total_tokens": len(prompt.split()) + len(response_content.split())
-            }
+                "total_tokens": len(prompt.split()) + len(response_content.split()),
+            },
         }
 
         if stream:
@@ -268,13 +262,7 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
                     "object": "text_completion",
                     "created": response_data["created"],
                     "model": response_data["model"],
-                    "choices": [
-                        {
-                            "index": 0,
-                            "text": "",
-                            "finish_reason": None
-                        }
-                    ]
+                    "choices": [{"index": 0, "text": "", "finish_reason": None}],
                 }
                 yield f"data: {json.dumps(chunk_data)}\n\n"
 
@@ -293,7 +281,7 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
             return StreamingResponse(
                 stream_generator(),
                 media_type="text/plain",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
             )
         else:
             return JSONResponse(content=response_data)
@@ -333,17 +321,13 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
         response_data = {
             "object": "list",
             "data": [
-                {
-                    "object": "embedding",
-                    "index": 0,
-                    "embedding": embedding_vector
-                }
+                {"object": "embedding", "index": 0, "embedding": embedding_vector}
             ],
             "model": server_config["model"],
             "usage": {
                 "prompt_tokens": len(input_text.split()),
-                "total_tokens": len(input_text.split())
-            }
+                "total_tokens": len(input_text.split()),
+            },
         }
 
         return JSONResponse(content=response_data)
@@ -351,9 +335,13 @@ def create_mock_server(server_config: Dict[str, Any]) -> FastAPI:
     return app
 
 
-async def simulate_delay(server_config: Dict[str, Any], custom_delay: Optional[float] = None):
+async def simulate_delay(
+    server_config: Dict[str, Any], custom_delay: Optional[float] = None
+):
     """Simulate server processing delay"""
-    delay = custom_delay if custom_delay is not None else server_config["response_delay"]
+    delay = (
+        custom_delay if custom_delay is not None else server_config["response_delay"]
+    )
     await asyncio.sleep(delay)
 
 
@@ -385,10 +373,7 @@ async def start_mock_server(server_config: Dict[str, Any]):
     logger.info(f"Starting {server_config['name']} on port {server_config['port']}")
 
     config = uvicorn.Config(
-        app=app,
-        host="0.0.0.0",
-        port=server_config["port"],
-        log_level="info"
+        app=app, host="0.0.0.0", port=server_config["port"], log_level="info"
     )
 
     server = uvicorn.Server(config)
@@ -421,13 +406,15 @@ def setup_logging():
         os.sys.stdout,
         format="<green>{time:MM-DD HH:mm:ss}</green> | <cyan>{name}</cyan>:<cyan>{function}:{line}</cyan> - <level>{message}</level>",
         level="INFO",
-        colorize=True
+        colorize=True,
     )
+
 
 def signal_handler(signum, frame):
     """Handle signals for graceful shutdown"""
     print("\n正在关闭Mock服务器...")
     sys.exit(0)
+
 
 def list_servers():
     """List all available mock servers"""
@@ -438,15 +425,16 @@ def list_servers():
         print(f"     模型: {server['model']}")
         print(f"     最大Token: {server['max_tokens']}")
         print(f"     响应延迟: {server['response_delay']}秒")
-        print(f"     失败率: {server['failure_rate']*100}%")
+        print(f"     失败率: {server['failure_rate'] * 100}%")
         print()
+
 
 def start_single_server(port: int):
     """Start a single mock server on the specified port"""
     # Find server config for the specified port
     server_config = None
     for config in MOCK_SERVERS:
-        if config['port'] == port:
+        if config["port"] == port:
             server_config = config
             break
 
@@ -467,6 +455,7 @@ def start_single_server(port: int):
     setup_logging()
     asyncio.run(start_mock_server(server_config))
 
+
 def start_all_servers():
     """Start all mock servers"""
     # Setup signal handler
@@ -476,12 +465,15 @@ def start_all_servers():
     print("启动所有Mock vLLM服务器...")
     print("服务器配置:")
     for server in MOCK_SERVERS:
-        print(f"- {server['name']}: http://localhost:{server['port']} ({server['model']})")
+        print(
+            f"- {server['name']}: http://localhost:{server['port']} ({server['model']})"
+        )
     print("\n按 Ctrl+C 停止所有服务器\n")
 
     # Setup logging and start servers
     setup_logging()
     asyncio.run(main())
+
 
 def main_cli():
     """Main command-line interface"""
@@ -493,21 +485,17 @@ def main_cli():
   python mock_server.py              # 启动所有服务器
   python mock_server.py --port 8801  # 启动单个服务器
   python mock_server.py --list       # 列出所有服务器
-        """
+        """,
     )
 
     parser.add_argument(
-        '--port',
+        "--port",
         type=int,
         choices=[8801, 8802, 8803],
-        help='启动单个服务器 (端口: 8801, 8802, 8803)'
+        help="启动单个服务器 (端口: 8801, 8802, 8803)",
     )
 
-    parser.add_argument(
-        '--list',
-        action='store_true',
-        help='列出所有可用的服务器配置'
-    )
+    parser.add_argument("--list", action="store_true", help="列出所有可用的服务器配置")
 
     args = parser.parse_args()
 
@@ -517,6 +505,7 @@ def main_cli():
         start_single_server(args.port)
     else:
         start_all_servers()
+
 
 if __name__ == "__main__":
     main_cli()

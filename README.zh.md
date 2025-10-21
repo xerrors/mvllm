@@ -35,8 +35,9 @@ vLLM Router 提供统一的入口，智能分配请求到最佳服务器。
 
 ```bash
 git clone https://github.com/xerrors/mvllm.git
-cd mvllm
-uv sync
+pip install -e .
+
+mvllm run
 ```
 
 ### 配置

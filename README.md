@@ -34,8 +34,9 @@ vLLM Router provides a unified entry point that intelligently distributes reques
 
 ```bash
 git clone https://github.com/xerrors/mvllm.git
-cd mvllm
-uv sync
+pip install -e .
+
+mvllm run
 ```
 
 ### Configuration

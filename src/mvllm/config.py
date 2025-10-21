@@ -6,25 +6,37 @@ import os
 import toml
 import httpx
 from typing import List, Optional, Dict, Tuple
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from loguru import logger
+
+__all__ = [
+    "Config",
+    "ServerConfig",
+    "AppConfig",
+    "HealthCheckStats",
+    "get_config",
+    "reset_config",
+]
 
 # Global configuration instance
 _config_instance = None
 _config_lock = None
 
-def get_config() -> 'Config':
+
+def get_config() -> "Config":
     """Get the global configuration instance"""
     global _config_instance
     if _config_instance is None:
         _config_instance = Config()
     return _config_instance
 
+
 def reset_config():
     """Reset the global configuration instance (for testing)"""
     global _config_instance
     _config_instance = None
+
 
 class ServerConfig(BaseModel):
     url: str
@@ -32,29 +44,39 @@ class ServerConfig(BaseModel):
     last_check: Optional[datetime] = Field(default=None)
     consecutive_failures: int = Field(default=0)
     last_failure_time: Optional[datetime] = Field(default=None)
-    max_concurrent_requests: int = Field(default=3, ge=1)  # 服务器最大并发请求数
+    max_concurrent_requests: int = Field(
+        default=3, ge=1
+    )  # Maximum concurrent requests for this server
 
-    # 主动健康检查相关字段
-    health_stats: 'HealthCheckStats' = Field(default_factory=lambda: HealthCheckStats())
+    # Active health check related fields
+    health_stats: "HealthCheckStats" = Field(default_factory=lambda: HealthCheckStats())
 
-    # 模型信息
-    supported_models: List[str] = Field(default_factory=list)  # 服务器支持的模型列表
-    models_last_updated: Optional[datetime] = Field(default=None)  # 模型信息最后更新时间
+    # Model information
+    supported_models: List[str] = Field(
+        default_factory=list
+    )  # List of models supported by this server
+    models_last_updated: Optional[datetime] = Field(
+        default=None
+    )  # Last time model info was updated
 
-    @validator('url')
+    @field_validator("url")
+    @classmethod
     def validate_url(cls, v):
-        if not v.startswith(('http://', 'https://')):
-            raise ValueError('URL must start with http:// or https://')
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("URL must start with http:// or https://")
         return v
+
 
 class HealthCheckStats(BaseModel):
     """Model to store health check statistics for a server."""
+
     response_times: List[float] = Field(default_factory=list)
     success_rate: float = 1.0
     total_checks: int = 0
     successful_checks: int = 0
     avg_response_time: float = 0.0
     last_response_time: Optional[float] = None
+
 
 class AppConfig(BaseModel):
     health_check_interval: int = Field(default=30, ge=1)
@@ -65,12 +87,23 @@ class AppConfig(BaseModel):
     failure_threshold: int = Field(default=2, ge=1)
     auto_recovery_threshold: int = Field(default=60, ge=1)
 
-    # 主动健康检查配置
-    enable_active_health_check: bool = Field(default=True)  # 是否启用主动健康检查
-    health_check_max_response_time: float = Field(default=10.0, ge=0.1)  # 最大可接受响应时间（秒）
-    health_check_min_success_rate: float = Field(default=0.8, ge=0.0, le=1.0)  # 最小成功率
-    health_check_window_size: int = Field(default=10, ge=1)  # 健康检查统计窗口大小
-    health_check_consecutive_failures: int = Field(default=3, ge=1)  # 连续失败多少次标记为不健康
+    # Active health check configuration
+    enable_active_health_check: bool = Field(
+        default=True
+    )  # Whether to enable active health checks
+    health_check_max_response_time: float = Field(
+        default=10.0, ge=0.1
+    )  # Maximum acceptable response time (seconds)
+    health_check_min_success_rate: float = Field(
+        default=0.8, ge=0.0, le=1.0
+    )  # Minimum success rate
+    health_check_window_size: int = Field(
+        default=10, ge=1
+    )  # Health check statistics window size
+    health_check_consecutive_failures: int = Field(
+        default=3, ge=1
+    )  # Consecutive failures before marking unhealthy
+
 
 class Config:
     def __init__(self, config_path: str = None):
@@ -86,21 +119,25 @@ class Config:
         """Load configuration from TOML file"""
         try:
             if not os.path.exists(self.config_path):
-                logger.warning(f"Config file {self.config_path} not found, using defaults")
+                logger.warning(
+                    f"Config file {self.config_path} not found, using defaults"
+                )
                 return
 
-            with open(self.config_path, 'r', encoding='utf-8') as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 config_data = toml.load(f)
 
             # Load server configurations
-            servers_data = config_data.get('servers', {}).get('servers', [])
+            servers_data = config_data.get("servers", {}).get("servers", [])
             self.servers = [ServerConfig(**server_data) for server_data in servers_data]
 
             # Load app configuration
-            app_config_data = config_data.get('config', {})
+            app_config_data = config_data.get("config", {})
             self.app_config = AppConfig(**app_config_data)
 
-            self.last_modified = datetime.fromtimestamp(os.path.getmtime(self.config_path))
+            self.last_modified = datetime.fromtimestamp(
+                os.path.getmtime(self.config_path)
+            )
             logger.info(f"Configuration loaded from {self.config_path}")
             logger.info(f"Loaded {len(self.servers)} servers")
 
@@ -152,7 +189,9 @@ class Config:
                 # Only mark as healthy if it wasn't already healthy
                 if not server.is_healthy:
                     server.is_healthy = True
-                    logger.info(f"Server {url} recovered (health status: {server.is_healthy})")
+                    logger.info(
+                        f"Server {url} recovered (health status: {server.is_healthy})"
+                    )
             else:
                 # Server failed - increment failure count
                 server.consecutive_failures += 1
@@ -163,10 +202,13 @@ class Config:
                 if server.consecutive_failures >= failure_threshold:
                     if server.is_healthy:  # Only log if status actually changed
                         server.is_healthy = False
-                        logger.warning(f"Server {url} marked as unhealthy after {server.consecutive_failures} consecutive failures")
+                        logger.warning(
+                            f"Server {url} marked as unhealthy after {server.consecutive_failures} consecutive failures"
+                        )
                 else:
-                    logger.info(f"Server {url} failure #{server.consecutive_failures}/{failure_threshold}")
-
+                    logger.info(
+                        f"Server {url} failure #{server.consecutive_failures}/{failure_threshold}"
+                    )
 
     def auto_recover_servers(self) -> None:
         """Auto-recover servers that haven't failed recently"""
@@ -176,40 +218,60 @@ class Config:
         for server in self.servers:
             if not server.is_healthy:
                 # If server has been marked unhealthy but hasn't failed recently, try to recover it
-                if (server.last_failure_time is None or
-                    (now - server.last_failure_time).total_seconds() > recovery_threshold):
+                if (
+                    server.last_failure_time is None
+                    or (now - server.last_failure_time).total_seconds()
+                    > recovery_threshold
+                ):
                     # Reset failure count but don't mark as healthy immediately
                     # The next active health check will determine if it's actually healthy
                     server.consecutive_failures = 0
-                    logger.info(f"Server {server.url} reset for auto-recovery attempt (no recent failures in {recovery_threshold}s)")
-                    logger.info(f"Server {server.url} will be re-evaluated in next health check cycle")
+                    logger.info(
+                        f"Server {server.url} reset for auto-recovery attempt (no recent failures in {recovery_threshold}s)"
+                    )
+                    logger.info(
+                        f"Server {server.url} will be re-evaluated in next health check cycle"
+                    )
 
                     # If active health check is disabled, mark as healthy for immediate recovery
                     if not self.app_config.enable_active_health_check:
                         server.is_healthy = True
-                        logger.info(f"Server {server.url} auto-recovered (active health check disabled)")
+                        logger.info(
+                            f"Server {server.url} auto-recovered (active health check disabled)"
+                        )
                     else:
                         # Active health check will evaluate the server in the next cycle
-                        logger.info(f"Server {server.url} will be tested in next active health check")
+                        logger.info(
+                            f"Server {server.url} will be tested in next active health check"
+                        )
 
     async def check_server_health(self, server: ServerConfig) -> Tuple[bool, float]:
         """Check the health of a single server"""
         import time
+
         start_time = time.time()
 
         try:
             # Use a simple health check endpoint - try to access /health or /v1/models
             health_urls = ["/health", "/v1/models"]
 
-            async with httpx.AsyncClient(timeout=self.app_config.health_check_timeout) as client:
+            async with httpx.AsyncClient(
+                timeout=self.app_config.health_check_timeout
+            ) as client:
                 for health_url in health_urls:
                     try:
                         response = await client.get(f"{server.url}{health_url}")
                         response.raise_for_status()
                         response_time = time.time() - start_time
-                        await self.update_server_health_stats(server, True, response_time)
+                        await self.update_server_health_stats(
+                            server, True, response_time
+                        )
                         return True, response_time
-                    except (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError):
+                    except (
+                        httpx.TimeoutException,
+                        httpx.ConnectError,
+                        httpx.HTTPStatusError,
+                    ):
                         continue  # Try next health check URL
 
             # If we get here, all health check URLs failed
@@ -223,7 +285,9 @@ class Config:
             await self.update_server_health_stats(server, False, response_time)
             return False, response_time
 
-    async def update_server_health_stats(self, server: ServerConfig, success: bool, response_time: float):
+    async def update_server_health_stats(
+        self, server: ServerConfig, success: bool, response_time: float
+    ):
         """Update server statistics and health status after a health check."""
         now = datetime.now()
         server.last_check = now
@@ -249,7 +313,9 @@ class Config:
             stats.success_rate = stats.successful_checks / stats.total_checks
 
         if stats.response_times:
-            stats.avg_response_time = sum(stats.response_times) / len(stats.response_times)
+            stats.avg_response_time = sum(stats.response_times) / len(
+                stats.response_times
+            )
 
         # Update overall health status if active health check is enabled
         if not self.app_config.enable_active_health_check:
@@ -257,11 +323,20 @@ class Config:
 
         was_healthy = server.is_healthy
 
-        success_rate_ok = stats.success_rate >= self.app_config.health_check_min_success_rate
-        response_time_ok = stats.avg_response_time <= self.app_config.health_check_max_response_time
-        consecutive_failures_ok = server.consecutive_failures < self.app_config.health_check_consecutive_failures
+        success_rate_ok = (
+            stats.success_rate >= self.app_config.health_check_min_success_rate
+        )
+        response_time_ok = (
+            stats.avg_response_time <= self.app_config.health_check_max_response_time
+        )
+        consecutive_failures_ok = (
+            server.consecutive_failures
+            < self.app_config.health_check_consecutive_failures
+        )
 
-        new_health_status = success_rate_ok and response_time_ok and consecutive_failures_ok
+        new_health_status = (
+            success_rate_ok and response_time_ok and consecutive_failures_ok
+        )
 
         if new_health_status != was_healthy:
             server.is_healthy = new_health_status
@@ -287,7 +362,9 @@ class Config:
         for server in self.servers:
             is_healthy, response_time = await self.check_server_health(server)
             results[server.url] = (is_healthy, response_time)
-            logger.debug(f"Health check for {server.url}: healthy={is_healthy}, response_time={response_time:.2f}s")
+            logger.debug(
+                f"Health check for {server.url}: healthy={is_healthy}, response_time={response_time:.2f}s"
+            )
 
         logger.info(f"Completed health checks: {len(results)} servers checked")
         return results
@@ -295,14 +372,16 @@ class Config:
     async def fetch_server_models(self, server: ServerConfig) -> None:
         """Fetch supported models from a vLLM server"""
         try:
-            async with httpx.AsyncClient(timeout=self.app_config.health_check_timeout) as client:
+            async with httpx.AsyncClient(
+                timeout=self.app_config.health_check_timeout
+            ) as client:
                 response = await client.get(f"{server.url}/v1/models")
                 response.raise_for_status()
 
                 models_data = response.json()
                 models = []
 
-                # vLLM 的 /v1/models API 返回格式通常是 {"object": "list", "data": [{"id": "model_name", ...}, ...]}
+                # vLLM's /v1/models API typically returns {"object": "list", "data": [{"id": "model_name", ...}, ...]}
                 if "data" in models_data:
                     for model_info in models_data["data"]:
                         if "id" in model_info:
@@ -310,11 +389,13 @@ class Config:
 
                 server.supported_models = models
                 server.models_last_updated = datetime.now()
-                logger.info(f"Updated models for {server.url}: {len(models)} models - {models}")
+                logger.info(
+                    f"Updated models for {server.url}: {len(models)} models - {models}"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to fetch models from {server.url}: {e}")
-            # 不更新模型信息，如果获取失败
+            # Don't update model information if fetch failed
 
     async def update_all_server_models(self) -> None:
         """Update model information for all servers"""
@@ -327,8 +408,16 @@ class Config:
 
     def get_servers_supporting_model(self, model_name: str) -> List[ServerConfig]:
         """Get list of servers that support the specified model"""
-        return [server for server in self.servers if model_name in server.supported_models]
+        return [
+            server for server in self.servers if model_name in server.supported_models
+        ]
 
-    def get_healthy_servers_supporting_model(self, model_name: str) -> List[ServerConfig]:
+    def get_healthy_servers_supporting_model(
+        self, model_name: str
+    ) -> List[ServerConfig]:
         """Get list of healthy servers that support the specified model"""
-        return [server for server in self.get_servers_supporting_model(model_name) if server.is_healthy]
+        return [
+            server
+            for server in self.get_servers_supporting_model(model_name)
+            if server.is_healthy
+        ]
