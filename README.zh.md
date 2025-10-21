@@ -1,6 +1,12 @@
-# vLLM Router
+# mvllm
 
-智能负载均衡器，用于分布式 vLLM 服务器集群
+**管理你的 vLLM 服务器** - 智能负载均衡器，用于分布式 vLLM 服务器集群
+
+[![PyPI version](https://badge.fury.io/py/mvllm.svg)](https://badge.fury.io/py/mvllm)
+[![GitHub stars](https://img.shields.io/github/stars/xerrors/mvllm?style=social)](https://github.com/xerrors/mvllm/stargazers)
+[![GitHub license](https://img.shields.io/github/license/xerrors/mvllm)](https://github.com/xerrors/mvllm/blob/main/LICENSE)
+[![Python versions](https://img.shields.io/pypi/pyversions/mvllm)](https://pypi.org/project/mvllm/)
+[![Downloads](https://img.shields.io/pypi/dm/mvllm)](https://pypi.org/project/mvllm/)
 
 ## 解决什么问题？
 
@@ -32,6 +38,16 @@ vLLM Router 提供统一的入口，智能分配请求到最佳服务器。
 ## 快速开始
 
 ### 安装
+
+#### 选项 1：从 PyPI 安装（推荐）
+
+```bash
+pip install mvllm
+
+mvllm run
+```
+
+#### 选项 2：从源码安装
 
 ```bash
 git clone https://github.com/xerrors/mvllm.git

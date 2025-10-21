@@ -1,6 +1,12 @@
-# vLLM Router
+# mvllm
 
-Intelligent load balancer for distributed vLLM server clusters
+**Manage your vLLM servers** - Intelligent load balancer for distributed vLLM server clusters
+
+[![PyPI version](https://badge.fury.io/py/mvllm.svg)](https://badge.fury.io/py/mvllm)
+[![GitHub stars](https://img.shields.io/github/stars/xerrors/mvllm?style=social)](https://github.com/xerrors/mvllm/stargazers)
+[![GitHub license](https://img.shields.io/github/license/xerrors/mvllm)](https://github.com/xerrors/mvllm/blob/main/LICENSE)
+[![Python versions](https://img.shields.io/pypi/pyversions/mvllm)](https://pypi.org/project/mvllm/)
+[![Downloads](https://img.shields.io/pypi/dm/mvllm)](https://pypi.org/project/mvllm/)
 
 ## What problem does it solve?
 
@@ -31,6 +37,16 @@ vLLM Router provides a unified entry point that intelligently distributes reques
 ## Quick Start
 
 ### Installation
+
+#### Option 1: Install from PyPI (Recommended)
+
+```bash
+pip install mvllm
+
+mvllm run
+```
+
+#### Option 2: Install from source
 
 ```bash
 git clone https://github.com/xerrors/mvllm.git
