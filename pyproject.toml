@@ -6,7 +6,7 @@ readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
-    { name = "Wenjie Zhang", email = "wenjie.zhang@stu.jiangnan.edu.cn" }
+    { name = "Wenjie Zhang", email = "xerrors@163.com" }
 ]
 keywords = ["vllm", "load-balancer", "fastapi", "llm", "inference", "gpu", "openai"]
 classifiers = [
