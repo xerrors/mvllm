@@ -144,9 +144,7 @@ async def lifespan(app: FastAPI):
 
     # Start active health check task
     if config.app_config.enable_active_health_check:
-        health_check_task = asyncio.create_task(
-            active_health_check_loop(config, config.app_config.health_check_interval)
-        )
+        health_check_task = asyncio.create_task(active_health_check_loop(config))
         logger.info(
             f"Active health check started with interval: {config.app_config.health_check_interval}s"
         )
@@ -155,9 +153,7 @@ async def lifespan(app: FastAPI):
         logger.info("Active health check disabled")
 
     # Start config reload task
-    config_reload_task = asyncio.create_task(
-        config_reload_loop(config, config.app_config.config_reload_interval)
-    )
+    config_reload_task = asyncio.create_task(config_reload_loop(config))
     logger.info(
         f"Config reload task started with interval: {config.app_config.config_reload_interval}s"
     )
@@ -190,58 +186,76 @@ async def lifespan(app: FastAPI):
     logger.info("vLLM Router shutdown complete")
 
 
-async def active_health_check_loop(config, interval: int):
+async def active_health_check_loop(config):
     """Active health check loop that runs periodically"""
-    logger.info(f"Starting active health check loop with interval: {interval}s")
+    logger.info(
+        f"Starting active health check loop with interval: {config.app_config.health_check_interval}s"
+    )
+
+    model_update_counter = getattr(active_health_check_loop, "counter", 0)
+
+    async def run_cycle():
+        nonlocal model_update_counter
+
+        # Perform health checks on all servers
+        health_results = await config.perform_health_checks()
+
+        # Update model information periodically (every 10 health check cycles)
+        # This prevents overwhelming the servers with model requests
+        model_update_counter += 1
+        setattr(active_health_check_loop, "counter", model_update_counter)
+
+        if model_update_counter % 10 == 0:  # Update models every 10 cycles
+            logger.info("Updating model information during health check cycle...")
+            await config.update_all_server_models()
+
+        # Log summary of health check results
+        healthy_count = sum(1 for is_healthy, _ in health_results.values() if is_healthy)
+        total_count = len(health_results)
+
+        if total_count > 0:
+            logger.info(
+                f"Health check completed: {healthy_count}/{total_count} servers healthy"
+            )
+
+            # Log detailed results for unhealthy servers
+            for server_url, (is_healthy, response_time) in health_results.items():
+                if not is_healthy:
+                    logger.warning(
+                        f"Server {server_url} is unhealthy (response_time: {response_time:.2f}s)"
+                    )
+
+    # Run an initial cycle immediately so new servers leave checking state faster
+    try:
+        await run_cycle()
+    except asyncio.CancelledError:
+        logger.info("Active health check loop cancelled before first cycle")
+        raise
+    except Exception as e:
+        logger.error(f"Error in initial active health check cycle: {e}")
 
     while True:
+        interval = max(1, config.app_config.health_check_interval)
         try:
             await asyncio.sleep(interval)
-
-            # Perform health checks on all servers
-            health_results = await config.perform_health_checks()
-
-            # Update model information periodically (every 10 health check cycles)
-            # This prevents overwhelming the servers with model requests
-            model_update_counter = getattr(active_health_check_loop, "counter", 0)
-            model_update_counter += 1
-            setattr(active_health_check_loop, "counter", model_update_counter)
-
-            if model_update_counter % 10 == 0:  # Update models every 10 cycles
-                logger.info("Updating model information during health check cycle...")
-                await config.update_all_server_models()
-
-            # Log summary of health check results
-            healthy_count = sum(
-                1 for is_healthy, _ in health_results.values() if is_healthy
-            )
-            total_count = len(health_results)
-
-            if total_count > 0:
-                logger.info(
-                    f"Health check completed: {healthy_count}/{total_count} servers healthy"
-                )
-
-                # Log detailed results for unhealthy servers
-                for server_url, (is_healthy, response_time) in health_results.items():
-                    if not is_healthy:
-                        logger.warning(
-                            f"Server {server_url} is unhealthy (response_time: {response_time:.2f}s)"
-                        )
+            await run_cycle()
 
         except asyncio.CancelledError:
             logger.info("Active health check loop cancelled")
             break
         except Exception as e:
             logger.error(f"Error in active health check loop: {e}")
-            await asyncio.sleep(interval)  # Continue even after errors
+            await asyncio.sleep(min(interval, 5))  # Continue even after errors
 
 
-async def config_reload_loop(config, interval: int):
+async def config_reload_loop(config):
     """Config reload loop that runs periodically"""
-    logger.info(f"Starting config reload loop with interval: {interval}s")
+    logger.info(
+        f"Starting config reload loop with interval: {config.app_config.config_reload_interval}s"
+    )
 
     while True:
+        interval = max(1, config.app_config.config_reload_interval)
         try:
             await asyncio.sleep(interval)
 
@@ -261,7 +275,7 @@ async def config_reload_loop(config, interval: int):
             break
         except Exception as e:
             logger.error(f"Error in config reload loop: {e}")
-            await asyncio.sleep(interval)  # Continue even after errors
+            await asyncio.sleep(min(interval, 5))  # Continue even after errors
 
 
 # Create FastAPI application
@@ -320,6 +334,9 @@ async def health_check():
         server_info = {
             "url": server.url,
             "healthy": server.is_healthy,
+            "health_status": server.health_status.value
+            if hasattr(server.health_status, "value")
+            else server.health_status,
             "last_check": server.last_check.isoformat() if server.last_check else None,
             "consecutive_failures": server.consecutive_failures,
             "success_rate": server.health_stats.success_rate,
@@ -365,6 +382,7 @@ async def load_stats():
                 "available_capacity": load_info["available_capacity"],
                 "utilization_percent": load_info["utilization"],
                 "status": load_info["status"],
+                "health_status": load_info.get("health_status"),
                 "last_updated": load_info["last_updated"],
                 "detailed_metrics": load_info["detailed_metrics"],
             }

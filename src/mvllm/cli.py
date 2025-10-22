@@ -6,7 +6,7 @@ import os
 import sys
 import typer
 from .main import main as app_main
-from .config import get_config
+from .config import ServerHealthStatus, get_config
 from . import __version__
 
 app = typer.Typer(
@@ -77,7 +77,12 @@ def check_config(
         print(f"   Healthy servers: {len(config_instance.get_healthy_servers())}")
 
         for server in config_instance.servers:
-            status = "✅" if server.is_healthy else "❌"
+            if server.health_status == ServerHealthStatus.CHECKING:
+                status = "🟡"
+            elif server.is_healthy:
+                status = "✅"
+            else:
+                status = "❌"
             print(
                 f"   {status} {server.url} (max_concurrent: {server.max_concurrent_requests})"
             )

@@ -5,6 +5,7 @@ Configuration management for vLLM Router
 import os
 import toml
 import httpx
+from enum import Enum
 from typing import List, Optional, Dict, Tuple
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
@@ -15,6 +16,7 @@ __all__ = [
     "ServerConfig",
     "AppConfig",
     "HealthCheckStats",
+    "ServerHealthStatus",
     "get_config",
     "reset_config",
 ]
@@ -38,9 +40,16 @@ def reset_config():
     _config_instance = None
 
 
+class ServerHealthStatus(str, Enum):
+    HEALTHY = "healthy"
+    UNHEALTHY = "unhealthy"
+    CHECKING = "checking"
+
+
 class ServerConfig(BaseModel):
     url: str
-    is_healthy: bool = Field(default=True)
+    is_healthy: bool = Field(default=False)
+    health_status: ServerHealthStatus = Field(default=ServerHealthStatus.CHECKING)
     last_check: Optional[datetime] = Field(default=None)
     consecutive_failures: int = Field(default=0)
     last_failure_time: Optional[datetime] = Field(default=None)
@@ -124,22 +133,69 @@ class Config:
                 )
                 return
 
+            previous_servers: Dict[str, ServerConfig] = {
+                server.url: server for server in self.servers
+            }
+
             with open(self.config_path, "r", encoding="utf-8") as f:
                 config_data = toml.load(f)
 
-            # Load server configurations
-            servers_data = config_data.get("servers", {}).get("servers", [])
-            self.servers = [ServerConfig(**server_data) for server_data in servers_data]
-
             # Load app configuration
             app_config_data = config_data.get("config", {})
-            self.app_config = AppConfig(**app_config_data)
+            new_app_config = AppConfig(**app_config_data)
+
+            # Load server configurations
+            servers_data = config_data.get("servers", {}).get("servers", [])
+            new_servers: List[ServerConfig] = []
+            reused_servers = 0
+            new_servers_count = 0
+
+            for server_data in servers_data:
+                server = ServerConfig(**server_data)
+                existing = previous_servers.get(server.url)
+
+                if existing:
+                    reused_servers += 1
+                    server.is_healthy = existing.is_healthy
+                    server.health_status = existing.health_status
+                    server.last_check = existing.last_check
+                    server.consecutive_failures = existing.consecutive_failures
+                    server.last_failure_time = existing.last_failure_time
+                    server.health_stats = existing.health_stats
+                    server.supported_models = list(existing.supported_models or [])
+                    server.models_last_updated = existing.models_last_updated
+                else:
+                    new_servers_count += 1
+                    if new_app_config.enable_active_health_check:
+                        server.is_healthy = False
+                        server.health_status = ServerHealthStatus.CHECKING
+                        server.last_check = None
+                        server.consecutive_failures = 0
+                        server.last_failure_time = None
+                        server.health_stats = HealthCheckStats()
+                        server.supported_models = []
+                        server.models_last_updated = None
+                    else:
+                        server.is_healthy = True
+                        server.health_status = ServerHealthStatus.HEALTHY
+                        server.last_check = datetime.now()
+                        server.consecutive_failures = 0
+                        server.last_failure_time = None
+                        server.health_stats = HealthCheckStats()
+
+                new_servers.append(server)
+
+            self.servers = new_servers
+            self.app_config = new_app_config
 
             self.last_modified = datetime.fromtimestamp(
                 os.path.getmtime(self.config_path)
             )
             logger.info(f"Configuration loaded from {self.config_path}")
-            logger.info(f"Loaded {len(self.servers)} servers")
+            logger.info(
+                f"Loaded {len(self.servers)} servers "
+                f"(reused={reused_servers}, new={new_servers_count})"
+            )
 
         except Exception as e:
             logger.error(f"Failed to load configuration: {e}")
@@ -186,12 +242,14 @@ class Config:
                 # Server is healthy - reset failure count
                 server.consecutive_failures = 0
                 server.last_failure_time = None
+                previous_status = server.health_status
                 # Only mark as healthy if it wasn't already healthy
-                if not server.is_healthy:
+                if not server.is_healthy or previous_status != ServerHealthStatus.HEALTHY:
                     server.is_healthy = True
-                    logger.info(
-                        f"Server {url} recovered (health status: {server.is_healthy})"
-                    )
+                    server.health_status = ServerHealthStatus.HEALTHY
+                    logger.info(f"Server {url} recovered (health status: healthy)")
+                else:
+                    server.health_status = ServerHealthStatus.HEALTHY
             else:
                 # Server failed - increment failure count
                 server.consecutive_failures += 1
@@ -200,12 +258,18 @@ class Config:
                 # Only mark as unhealthy after multiple consecutive failures
                 failure_threshold = self.app_config.failure_threshold
                 if server.consecutive_failures >= failure_threshold:
-                    if server.is_healthy:  # Only log if status actually changed
+                    if (
+                        server.is_healthy
+                        or server.health_status != ServerHealthStatus.UNHEALTHY
+                    ):
                         server.is_healthy = False
+                        server.health_status = ServerHealthStatus.UNHEALTHY
                         logger.warning(
                             f"Server {url} marked as unhealthy after {server.consecutive_failures} consecutive failures"
                         )
                 else:
+                    if server.health_status == ServerHealthStatus.HEALTHY:
+                        server.health_status = ServerHealthStatus.CHECKING
                     logger.info(
                         f"Server {url} failure #{server.consecutive_failures}/{failure_threshold}"
                     )
@@ -226,6 +290,7 @@ class Config:
                     # Reset failure count but don't mark as healthy immediately
                     # The next active health check will determine if it's actually healthy
                     server.consecutive_failures = 0
+                    server.health_status = ServerHealthStatus.CHECKING
                     logger.info(
                         f"Server {server.url} reset for auto-recovery attempt (no recent failures in {recovery_threshold}s)"
                     )
@@ -236,6 +301,7 @@ class Config:
                     # If active health check is disabled, mark as healthy for immediate recovery
                     if not self.app_config.enable_active_health_check:
                         server.is_healthy = True
+                        server.health_status = ServerHealthStatus.HEALTHY
                         logger.info(
                             f"Server {server.url} auto-recovered (active health check disabled)"
                         )
@@ -319,6 +385,10 @@ class Config:
 
         # Update overall health status if active health check is enabled
         if not self.app_config.enable_active_health_check:
+            # When active health check is disabled, treat any success as healthy
+            if success:
+                server.is_healthy = True
+                server.health_status = ServerHealthStatus.HEALTHY
             return
 
         was_healthy = server.is_healthy
@@ -340,6 +410,11 @@ class Config:
 
         if new_health_status != was_healthy:
             server.is_healthy = new_health_status
+            server.health_status = (
+                ServerHealthStatus.HEALTHY
+                if new_health_status
+                else ServerHealthStatus.UNHEALTHY
+            )
             if new_health_status:
                 logger.info(
                     f"Server {server.url} recovered - success_rate: {stats.success_rate:.2f}, "
@@ -350,6 +425,11 @@ class Config:
                     f"Server {server.url} marked as unhealthy - success_rate: {stats.success_rate:.2f}, "
                     f"avg_response_time: {stats.avg_response_time:.2f}s, consecutive_failures: {server.consecutive_failures}"
                 )
+        else:
+            if new_health_status:
+                server.health_status = ServerHealthStatus.HEALTHY
+            else:
+                server.health_status = ServerHealthStatus.UNHEALTHY
 
     async def perform_health_checks(self) -> Dict[str, Tuple[bool, float]]:
         """Perform health checks on all servers"""

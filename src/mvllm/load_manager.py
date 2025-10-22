@@ -12,7 +12,7 @@ from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 from rich.panel import Panel
-from .config import Config, get_config
+from .config import Config, ServerHealthStatus, get_config
 
 __all__ = [
     "LoadManager",
@@ -213,6 +213,9 @@ class LoadManager:
                     if server.max_concurrent_requests > 0
                     else 0,
                     "status": server.is_healthy,
+                    "health_status": server.health_status.value
+                    if isinstance(server.health_status, ServerHealthStatus)
+                    else server.health_status,
                     "last_updated": self.last_updated.get(server.url, None).isoformat()
                     if self.last_updated.get(server.url, None)
                     else None,
@@ -289,7 +292,15 @@ class LoadManager:
 
                 # Get server health status - uniformly use status from config
                 server_config = self.config.get_server_by_url(server.url)
-                status = server_config.is_healthy if server_config else False
+                if server_config:
+                    health_status = server_config.health_status
+                    if not isinstance(health_status, ServerHealthStatus):
+                        try:
+                            health_status = ServerHealthStatus(health_status)
+                        except ValueError:
+                            health_status = ServerHealthStatus.UNHEALTHY
+                else:
+                    health_status = ServerHealthStatus.UNHEALTHY
 
                 # Get detailed metrics
                 detailed_metrics = load_info["detailed_metrics"]
@@ -307,13 +318,19 @@ class LoadManager:
                     models_display = "[dim]No models[/dim]"
 
                 # Set color based on load status
-                if not status:
+                if health_status == ServerHealthStatus.UNHEALTHY:
                     # Add strikethrough for unhealthy servers
                     server_name = f"[red strike]{server_name}[/red strike]"
                     models_display = f"[red strike]{models_display}[/red strike]"
                     running_str = f"[red]{running}[/red]"
                     waiting_str = f"[red]{waiting}[/red]"
                     utilization_str = f"[red]{utilization:.1f}%[/red]"
+                elif health_status == ServerHealthStatus.CHECKING:
+                    server_name = f"[yellow]{server_name}[/yellow]"
+                    models_display = f"[yellow]{models_display}[/yellow]"
+                    running_str = f"[yellow]{running}[/yellow]"
+                    waiting_str = f"[yellow]{waiting}[/yellow]"
+                    utilization_str = f"[yellow]{utilization:.1f}%[/yellow]"
                 elif utilization >= 90:
                     server_name = f"[red]{server_name}[/red]"
                     running_str = f"[red]{running}[/red]"

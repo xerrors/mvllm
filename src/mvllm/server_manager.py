@@ -40,6 +40,9 @@ class ServerManager:
                 {
                     "url": server.url,
                     "healthy": server.is_healthy,
+                    "health_status": server.health_status.value
+                    if hasattr(server.health_status, "value")
+                    else server.health_status,
                     "current_load": load_stats["server_loads"]
                     .get(server.url, {})
                     .get("current_load", 0),
